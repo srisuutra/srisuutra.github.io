@@ -72,6 +72,10 @@ table.in input{background:var(--inp)}table.in input.gp{background:#d7f0e2;border
 <p class="bar"><button onclick="addL()">+ Add link</button><label style="color:var(--ink)"><input type="checkbox" id="qr"> Show QR code for the first ticked link</label></p>
 <small style="color:var(--mut)">A PNG cannot contain clickable links. The PDF keeps them clickable; in the PNG the link text and QR code are visible.</small></div>
 <div class="panel"><h2>4. Notes <small style="font-weight:400;color:var(--mut)">(tick to include in the report, image, PDF)</small></h2><div id="nt"></div><p><button onclick="addN()">+ Add note</button></p></div>
+<div class="panel"><h2>5. Telegram <small style="font-weight:400;color:var(--mut)">(send today's picture to your channel; token stays in this browser only)</small></h2>
+<p class="bar"><label>Bot token</label><input id="tg_token" type="password" style="width:300px" placeholder="123456:ABC... from @BotFather" autocomplete="off"><label>Chat / channel</label><input id="tg_chat" style="width:220px" placeholder="@yourchannel or -100123..."><label>Extra line</label><input id="tg_extra" style="width:260px" placeholder="optional, added under the numbers"></p>
+<p class="bar"><button onclick="tgSend('summary')" style="background:#c9a43b;border-color:#c9a43b;color:#1c2a4a">Send summary picture to Telegram</button><button class="g" onclick="tgSend('report')">Send full report picture</button><button class="g" onclick="tgCopyCap(this)">Copy caption text</button><span id="tg_msg" style="color:var(--mut);font-size:12px"></span></p>
+<small style="color:var(--mut)">Set up once: in Telegram open @BotFather, send /newbot, copy the token. Add the bot to your channel as an administrator. Chat = @channelname (public channel) or the numeric id. The token is saved only in this browser, never in the Excel file or data.json. Anyone with the token can post as your bot, so do not share it.</small></div>
 <div class="panel bar">
 <button onclick="xl()">Save Excel (database)</button>
 <button class="g" onclick="document.getElementById('f').click()">Load Excel</button><input type="file" id="f" accept=".xlsx,.xls" hidden>
@@ -275,5 +279,27 @@ function shot(cb,el){el=el||$('report');html2canvas(el,{scale:el.offsetWidth>140
 function png2(){shot(c=>{const u=c.toDataURL('image/png');dl(u,'SRISUUTRA_summary.png');$('ov').innerHTML='<p style="color:#fff">Summary image generated. If it did not download, right-click or long-press to save. Click anywhere to close.</p><img src="'+u+'">';$('ov').style.display='block'},$('summary'))}
 function png(){shot(c=>{const u=c.toDataURL('image/png');dl(u,'SRISUUTRA_report.png');$('ov').innerHTML='<p style="color:#fff">Image generated. If it did not download, right-click or long-press to save. Links in an image cannot be clicked: the link text and QR code are shown, and the PDF keeps links clickable. Click anywhere to close.</p><img src="'+u+'">';$('ov').style.display='block'})}
 function pdf(){shot(c=>{const{jsPDF}=window.jspdf,k=c.width/$('report').offsetWidth,w=c.width/k,h=c.height/k,p=new jsPDF({orientation:'l',unit:'px',format:[w,h]});p.addImage(c.toDataURL('image/png'),'PNG',0,0,w,h);const R0=$('report').getBoundingClientRect();document.querySelectorAll('#report a.lk').forEach(a=>{const r=a.getBoundingClientRect();p.link(r.left-R0.left,r.top-R0.top,r.width,r.height,{url:a.href})});p.save('SRISUUTRA_report.pdf')})}
+// ---- Telegram ----
+const TGK='srisutra_tg';
+function tgGet(){try{return JSON.parse(localStorage.getItem(TGK))||{}}catch(e){return{}}}
+function tgPut(){try{localStorage.setItem(TGK,JSON.stringify({token:$('tg_token').value.trim(),chat:$('tg_chat').value.trim(),extra:$('tg_extra').value}))}catch(e){}}
+(function(){const g=tgGet();$('tg_token').value=g.token||'';$('tg_chat').value=g.chat||'';$('tg_extra').value=g.extra||'';['tg_token','tg_chat','tg_extra'].forEach(i=>$(i).addEventListener('input',tgPut))})();
+function tgCaption(){const c=calc(),T=c.tot,sg=n=>(n<0?'-':'+')+'₹'+Math.abs(Math.round(n)).toLocaleString('en-IN'),sp=n=>(n<0?'':'+')+n.toFixed(2)+'%';
+ const d=S.asof?new Date(S.asof+'T00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'';
+ const ls=S.links.filter(l=>l.on&&l.url.trim()).map(l=>l.label+': '+safe(l.url));
+ const x=$('tg_extra').value.trim();
+ return[(S.title||'SRISUUTRA ALGO TRADING').replace(/<[^>]+>/g,'')+' | '+d,'Today: '+sg(T.day)+' ('+sp(T.dayR)+')','Month: '+sg(T.mo)+' ('+sp(T.moR)+')','YTD: '+sg(T.yr)+' ('+sp(T.yrR)+')','Max drawdown: '+pc(T.max)].concat(x?['',x]:[]).concat(ls.length?['',...ls]:[]).concat(['','Past performance does not guarantee future returns.']).join('\n')}
+function tgCopyCap(b){const t=tgCaption(),o=b.textContent;const ok=()=>{b.textContent='Copied ✓';setTimeout(()=>b.textContent=o,1500)};try{navigator.clipboard.writeText(t).then(ok,()=>prompt('Copy this text',t))}catch(e){prompt('Copy this text',t)}}
+async function tgSend(kind){const m=$('tg_msg'),tok=$('tg_token').value.trim(),chats=$('tg_chat').value.split(/[,\n]/).map(x=>x.trim()).filter(Boolean);
+ if(!tok||!chats.length){m.textContent='Enter the bot token and the chat / channel first.';return}
+ if(!window.html2canvas){m.textContent='The picture library did not load. Check your internet connection and reload.';return}
+ m.textContent='Making the picture...';
+ try{const el=kind==='summary'?$('summary'):$('report'),cv=await html2canvas(el,{scale:2,backgroundColor:'#fff'}),bl=await new Promise(r=>cv.toBlob(r,'image/png'));
+  const cap=tgCaption().slice(0,1024),done=[];
+  for(const ch of chats){const fd=new FormData();fd.append('chat_id',ch);fd.append('caption',cap);fd.append('photo',bl,'srisuutra_'+(S.asof||'today')+'.png');
+   const r=await fetch('https://api.telegram.org/bot'+encodeURIComponent(tok).replace(/%3A/g,':')+'/sendPhoto',{method:'POST',body:fd}),j=await r.json();
+   if(!j.ok)throw new Error((j.description||'Telegram refused the message')+' (chat '+ch+')');done.push(ch)}
+  m.textContent='Sent to '+done.join(', ')+' ✓'}catch(e){m.textContent='Not sent: '+e.message}}
+
 edit();
 </script></body></html>

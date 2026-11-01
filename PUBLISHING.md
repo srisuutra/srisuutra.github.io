@@ -50,3 +50,8 @@ See **Daily update** at the top of this file.
 ## E. Optional
 - Custom domain: Settings → Pages → *Custom domain*.
 - If you add a Telegram link to the entry page's Links, it shows on the site.
+
+## F. Telegram
+- Link button on the site: in the daily tool, section 3 "Social media links", add a link named Telegram (https://t.me/yourchannel), tick it, export data.json and upload. The gold "Join Telegram" button then appears on the site. Or set it once in `config.json`: `{"telegram": "https://t.me/yourchannel"}`.
+- Daily post: in the daily tool, section 5 "Telegram", enter the bot token and channel once, then click "Send summary picture to Telegram" after exporting. The token stays in your browser only.
+- Share codes: the Share code column in section 1 of the tool; they show on the Share Codes tab of the site after export.

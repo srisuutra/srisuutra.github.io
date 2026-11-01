@@ -149,7 +149,6 @@
      <p class="sub">Simulated on historical data with modelled costs. Not live trading. Pick one or more reports; reports from different runs are combined on <b>common dates only</b>.</p>
      <div class="row" id="b_reports"></div>
      <div class="row" style="margin-top:8px"><b style="font-size:13px">Strategy groups</b><span id="b_groups" class="row"></span></div>
-     <div class="note">Directional = the six logics, always together. <b>Call selling is bearish; put selling is bullish.</b> Per-logic detail is not published.</div>
      <div id="b_meta" class="sub"></div></div>
     <div id="b_body"></div>`;
     $('#b_reports').innerHTML = INDEX.map(x => `<span class="chip ${S.sel.includes(x.id) ? 'on' : ''}" data-rep="${esc(x.id)}" title="${esc(x.id)}">${esc(x.title)} <small>${esc(x.range.start)} to ${esc(x.range.end)}</small></span>`).join('');
@@ -211,7 +210,7 @@
     $('#p_share').innerHTML = `<div class="card"><h2>Share this view</h2><p class="sub">The code holds your selections: tab, reports, groups, capital and cost settings. Anyone who opens the link or pastes the code sees the same numbers.</p>
       <div class="row"><input id="sh_cur" readonly style="flex:1;min-width:240px" value="${esc(location.href)}"><button class="pri" data-share>Copy share link</button></div></div>
      <div class="card"><h2>Paste a share code or link</h2><div class="row"><input id="sh_in" placeholder="Paste a share code or a full link" style="flex:1;min-width:240px"><button class="gold" id="sh_go">Load</button></div><p class="sub" id="sh_msg"></p></div>
-     ${codes.length ? `<div class="card"><h2>Strategy share codes</h2><div class="scroll"><table class="t"><tr><th>Strategy</th><th>Share code</th></tr>${codes.map(x => `<tr><td>${esc(x.name)}</td><td><span class="fp">${esc(x.code)}</span> <button class="sm" data-copycode="${esc(x.code)}">Copy</button></td></tr>`).join('')}</table></div></div>` : ''}`;
+     ${codes.length ? `<div class="card"><h2>Strategy share codes</h2><div class="scroll"><table class="t"><tr><th>Strategy</th><th>Share code</th></tr>${codes.map(x => `<tr><td>${esc(x.name)}</td><td><span class="fp">${esc(x.code)}</span> <button class="sm" data-copycode="${esc(x.code)}">Copy</button></td></tr>`).join('')}</table></div></div>` : '<div class="card"><h2>Strategy share codes</h2><p class="sub">No strategy share codes have been published yet. They appear here once added in the daily tool (Strategies table, Share code column) and exported.</p></div>'}`;
   }
   function loadCode(txt) {
     txt = String(txt || '').trim(); if (!txt) return false;
@@ -322,7 +321,7 @@
     $('#p_about').innerHTML = `
     <div class="card"><h2>How the numbers are made</h2><ul>
      <li><b>Backtest vs live.</b> Backtests are simulated on historical data. Live results are entered by hand by the owner, net of charges. They are always shown separately and never joined into one curve.</li>
-     <li><b>Size and capital.</b> Non-directional trades 195 units per leg; each directional logic trades 65 units, the same in every year. Deployed capital: non-directional ${inr(400000)}, directional ${inr(100000)}, both together ${inr(400000)} (margin offset), not ${inr(500000)}. Size = floor(capital ÷ deployed).</li>
+     <li><b>Size and capital.</b> Non-directional trades 195 units per leg; directional trades 65 units per leg, the same in every year. Deployed capital: non-directional ${inr(400000)}, directional ${inr(100000)}, both together ${inr(400000)} (margin offset), not ${inr(500000)}. Size = floor(capital ÷ deployed).</li>
      <li><b>ROI and drawdown</b> are a % of the capital on the slider. Idle capital between size steps dilutes ROI. Drawdown is the fall from the highest cumulative P&amp;L, measured daily for intraday strategies (per trade for positional).</li>
      <li><b>Combining reports</b> from different runs uses common dates only; costs are summed.</li>
      <li><b>DTE</b> = trading sessions to expiry: expiry day 0, the session before 1; weekends and holidays are not counted.</li>
@@ -385,7 +384,7 @@
     if (ok) return; $('#gate').style.display = 'flex';
     $('#agree').onclick = () => { try { localStorage.setItem('ghs_agreed', '1'); } catch (e) { /* ignore */ } $('#gate').style.display = 'none'; };
   }
-  const BUILD = '2026-11-01.8';
+  const BUILD = '2026-11-01.9';
   function loadAbs(src) { return new Promise((res, rej) => { const t = document.createElement('script'); t.src = src + '?v=' + BUILD; t.onload = res; t.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(t); }); }
   /* Makes the page work even if an older index.html is still on the server. */
   async function ensureShell() {
