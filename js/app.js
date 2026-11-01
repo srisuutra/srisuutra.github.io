@@ -5,7 +5,7 @@
 (function () {
   'use strict';
   const E = window.GHE, C = window.GC, esc = C.esc, inr = C.inr, pc = C.pc, cls = C.cls;
-  const LIVE_URL = 'live/data.json', INDEX_URL = 'reports/index.json';
+  const LIVE_URLS = ['live/data.json', 'live/live.json', 'data.json'], INDEX_URL = 'reports/index.json';
   const GROUP_NAME = { NONDIRECTIONAL: 'Non-directional', DIRECTIONAL: 'Directional' };
   const gname = g => GROUP_NAME[g] || g;
   const $ = s => document.querySelector(s);
@@ -27,6 +27,36 @@
   }
   function sync() { try { history.replaceState(null, '', '#s=' + encode()); } catch (e) { /* file:// */ } }
   function shareBtn() { return `<button class="sm" data-share>Copy share link</button>`; }
+
+  /* ---------- live file: accepts the entry tool's data.json (v1) or the older ganithayyantra-live file ---------- */
+  function asLive(j) {
+    if (!j || typeof j !== 'object') return null;
+    if (Array.isArray(j.strat) && j.days) return j;
+    if (j.format === 'ganithayyantra-live' && Array.isArray(j.strategies) && j.days) return { v: 1, title: j.title || 'SRISUUTRA LIVE', sub: '', asof: j.asof, cumOn: true, cumCap: '', strat: j.strategies.map(x => ({ id: x.id, name: x.name || x.id, cap: x.capital, mult: 1, ex: '', code: '' })), days: j.days, links: j.links || [], notes: j.notes || [] };
+    return null;
+  }
+  /* If the usual files are missing or empty, look through the public repo (one GitHub API call) for any report / live json that was put in the wrong place. */
+  let DIAG = '';
+  async function discover() {
+    let repo = ''; try { repo = (await getJSON('config.json')).repo || ''; } catch (e) { /* optional */ }
+    const host = location.hostname;
+    if (!repo && /\.github\.io$/.test(host)) { const o = host.split('.')[0], first = location.pathname.split('/')[1]; repo = first && first !== 'index.html' ? o + '/' + first : o + '/' + host; }
+    if (!repo) return;
+    let paths = null;
+    for (const br of ['main', 'master']) { try { const j = await getJSON('https://api.github.com/repos/' + repo + '/git/trees/' + br + '?recursive=1'); paths = j.tree.filter(x => x.type === 'blob').map(x => x.path); break; } catch (e) { /* try next */ } }
+    if (!paths) return;
+    const js = paths.filter(x => /\.json$/i.test(x) && !/(^|\/)(config|package|package-lock|index)\.json$/i.test(x) && !/^(vendor|tests|tools|node_modules)\//.test(x)).slice(0, 40);
+    DIAG = js.length ? 'JSON files found in the repository: ' + js.join(', ') : 'No JSON data files were found anywhere in the repository.';
+    for (const f of js) {
+      try {
+        const j = await getJSON(f);
+        if (j && j.format === 'ganithayyantra-report' && j.version === 1 && !INDEX.some(x => x.id === (j.id || f))) {
+          const id = j.id || f; INDEX.push({ id, title: j.title || id, range: j.range || { start: '', end: '' }, strategies: (j.strategies || []).map(x => x.id), file: f }); j.trades = j.trades || []; REP[id] = j;
+        } else if (!LIVE) { const l = asLive(j); if (l) { LIVE = l; LIVE_ERR = ''; } }
+      } catch (e) { /* not a usable file */ }
+    }
+    if (INDEX.length) IDX_ERR = '';
+  }
 
   /* ---------- loading ---------- */
   async function getJSON(u) { const r = await fetch(u, { cache: 'no-cache' }); if (!r.ok) throw new Error(u + ' (' + r.status + ')'); return r.json(); }
@@ -108,7 +138,7 @@
   function buildBT() {
     const el = $('#p_bt');
     if (IDX_ERR) { el.innerHTML = `<div class="card"><h2>Backtest reports</h2><div class="note warn">${esc(IDX_ERR)}</div></div>`; return; }
-    if (!INDEX.length) { el.innerHTML = '<div class="card"><h2>Backtest reports</h2><p>No reports have been published yet.</p></div>'; return; }
+    if (!INDEX.length) { el.innerHTML = '<div class="card"><h2>Backtest reports</h2><p>No reports have been published yet.</p>' + (DIAG ? '<p class="sub">' + esc(DIAG) + '. Each report must be a <b>report.json</b> file from the backtest tool.</p>' : '') + '</div>'; return; }
     el.innerHTML = `
     <div class="card"><h2>Backtest ${badge('bt')} ${exportRow('bt')}</h2>
      <p class="sub">Simulated on historical data with modelled costs. Not live trading. Pick one or more reports; reports from different runs are combined on <b>common dates only</b>.</p>
@@ -196,25 +226,26 @@
   function buildBTBody(M) {
     const slidersOn = M.hasT;
     $('#b_body').innerHTML = `
-    <div class="card" data-sec="strategy combined"><h2>Capital ${badge('bt')}</h2>
-     <p class="sub">Size = floor(capital ÷ deployed). Deployed capital for this selection: <b>${inr(M.dep)}</b>. Between steps the extra capital sits idle, so ROI and drawdown (a % of the capital chosen here) are diluted.</p>
-     <div class="cslide" style="grid-template-columns:90px 1fr 120px 90px"><span>Capital</span><input type="range" id="b_cap" min="${M.dep}" max="${M.dep * 5}" step="10000"><output id="b_capv"></output><span id="b_k"></span></div>
-     <label><input type="checkbox" id="b_scale"> Orders scale with size (each set is its own orders). Untick for “one bigger order per leg”, where per-order brokerage does not scale.</label></div>
+    <div class="card" id="b_panel" data-sec="strategy monthly combined compare drawdown trade cost"><h2>Cost Lab: capital and costs ${badge('bt')}</h2>
+     <p class="sub">Every slider opens at what the backtest actually charged (STT and exchange at their turnover-weighted average of the dated rates). A slider you have not moved keeps the backtest's own figure, line by line; move it and that line is re-priced on a linear model. <b>Every number, chart and table on this page updates as you move a slider.</b> Capital: size = whole multiples of the deployed capital (<b>${inr(M.dep)}</b>); ROI and drawdown are a % of the capital on the slider.</p>
+     <div class="labcap"><b>Capital (₹)</b><input type="range" id="b_cap" min="${M.dep}" max="${M.dep * 5}" step="10000"><input type="number" id="b_capn" min="${M.dep}" step="10000"><span class="sub">Deployed ${inr(M.dep)} → trading <b id="b_k"></b></span><output id="b_capv" hidden></output></div>
+     ${slidersOn ? '<div id="b_lab" class="labgrid"></div>' : '<div class="note warn">Cost sliders are not available: this report was exported without trade legs. Capital still works.</div>'}
+     <div class="row" style="margin:8px 0">${slidersOn ? '<label><input type="checkbox" id="b_stat"> Apply statutory charges (STT / exchange / SEBI / GST / stamp / IPFT)</label>' : ''}<label><input type="checkbox" id="b_scale"> At 2×, 3× … capital each set is its own orders (every output scales; untick: one bigger order per leg)</label><button class="sm" id="b_reset">Reset all to the backtest</button><button class="sm" data-share>Copy share link</button>
+      <span class="seg" id="b_view"><button data-view="net">Net of costs</button><button data-view="gross">Gross (before costs)</button></span></div>
+     <div class="kpis" id="b_labk"></div></div>
     <div class="kpis" id="b_kpis" data-sec="strategy combined"></div>
     <div class="card" id="b_combined" data-sec="combined"></div>
     <div class="grid2" data-sec="strategy combined">${chart('b_eq', 'Equity curve (cumulative P&L)', 'bt')}${chart('b_dd', 'Drawdown (% of capital)', 'bt')}</div>
-    <div class="row noprint" data-sec="strategy combined"><div class="seg" id="b_view"><button data-view="net">Net of costs</button><button data-view="gross">Gross (before costs)</button></div></div>
     <div class="grid2" data-sec="monthly">${chart('b_mon', 'Monthly net P&L', 'bt')}<div class="card"><h2>P&amp;L calendar ${badge('bt')}</h2><div id="b_cal"></div></div></div>
     <div data-sec="monthly">${periodsHTML('b_', 'bt')}</div>
     <div class="card" data-sec="drawdown"><h2>Drawdown analytics ${badge('bt')}</h2><div id="b_dda"></div></div>
     <div class="card" id="b_cmp_card" data-sec="compare"><h2>Compare groups ${badge('bt')}</h2><div id="b_cmp"></div></div>
     <div class="card" data-sec="trade"><h2>Trade analytics ${badge('bt')}</h2><div id="b_ta"></div></div>
-    <div class="card" data-sec="cost"><h2>Cost Lab ${badge('bt')} <button class="sm noprint" id="b_reset">Reset to backtest</button></h2>
-     <p class="sub">Costs are modelled. A slider left at <b>backtest</b> uses the backtest's own dated charges; moving it re-prices that line on a linear model. Cost sliders apply to backtests only; live results are real money.</p>
-     ${slidersOn ? `<div id="b_lab"></div><div class="row"><label><input type="checkbox" id="b_stat"> Statutory charges on (STT, exchange, SEBI, stamp, IPFT)</label></div>` : '<div class="note warn">Not available: this report has no trade legs.</div>'}
+    <div class="card" data-sec="cost"><h2>Cost breakdown ${badge('bt')}</h2>
+     <p class="sub">Move the sliders in the panel above. This section breaks the charges down line by line against the backtest's own figures.</p>
      <div class="grid2" style="margin-top:10px"><div id="b_costtbl" class="scroll"></div><div><div id="b_costchart"></div><div id="b_be"></div></div></div></div>`;
     if (slidersOn) {
-      $('#b_lab').innerHTML = LAB.map(([k, l, mn, mx, st, u]) => `<div class="cslide" data-k="${k}"><span>${l}</span><input type="range" min="${mn}" max="${mx}" step="${st}"><output></output><span class="act"><button class="sm" data-clr="${k}">actual</button></span></div>`).join('');
+      $('#b_lab').innerHTML = LAB.map(([k, l, mn, mx, st, u]) => `<div class="lab1" data-k="${k}"><label>${l.toUpperCase()}: <output></output></label><input type="range" min="${mn}" max="${mx}" step="${st}"><button class="sm" data-clr="${k}">actual</button></div>`).join('');
     }
   }
 
@@ -222,12 +253,13 @@
 
   function updateBT(M) {
     const m = M.m;
-    $('#b_cap').value = M.cap; $('#b_capv').textContent = inr(M.cap); $('#b_k').textContent = M.k + '× size'; $('#b_scale').checked = S.cfg.orders_scale_with_size;
+    $('#b_cap').value = M.cap; $('#b_capn').value = M.cap; $('#b_capv').textContent = inr(M.cap); $('#b_k').textContent = M.k + '×'; $('#b_scale').checked = S.cfg.orders_scale_with_size;
     $('#b_kpis').innerHTML = kpi('Net P&L', inr(m.total), pc(m.roi) + ' ROI on ' + inr(M.cap), cls(m.total)) + kpi('Max drawdown', pc(-m.dd.maxPct), inr(-m.dd.max) + ' | ' + M.basis + ' basis', 'neg') + kpi('Current drawdown', pc(-m.dd.curPct), inr(-m.dd.cur), m.dd.cur > 0 ? 'neg' : '') +
       kpi('Win days', m.winPct.toFixed(1) + '%', m.tradingDays + ' trading days / ' + m.sessions + ' sessions') + kpi('Sharpe (daily, ×√252)', m.sharpe.toFixed(2), 'on daily net') +
       kpi('Best day', inr(m.best ? m.best.net : 0), m.best ? fdate(m.best.date) : '', 'pos') + kpi('Worst day', inr(m.worst ? m.worst.net : 0), m.worst ? fdate(m.worst.date) : '', 'neg') + kpi('Costs', inr(m.costs), m.gross ? (m.costs / Math.abs(m.gross) * 100).toFixed(0) + '% of |gross|' : '');
     { const rr = M.reps.map(r => { const n = r.daily.reduce((t, d) => t + d.net, 0); return `<tr><td>${esc(r.title)}</td><td>${fdate(r.range.start)} to ${fdate(r.range.end)}</td><td>${r.daily.length}</td><td class="${cls(n)}">${inr(n)}</td></tr>`; }).join('');
       $('#b_combined').innerHTML = `<h2>Combined view ${badge('bt')}</h2><p class="sub">${M.reps.length > 1 ? 'Reports are combined on <b>common dates only</b>, so the combined figure is not the plain sum of the rows below.' : 'One report selected. Pick more reports above to combine them on common dates.'} Report rows are at 1× size, backtest costs.</p><div class="scroll"><table class="t"><tr><th>Report</th><th>Range</th><th>Sessions</th><th>Net P&amp;L (1×)</th></tr>${rr}<tr class="tt"><td>Combined: ${M.groups.map(gname).join(' + ')}</td><td>${m.dates.length ? fdate(m.dates[0]) + ' to ' + fdate(m.dates[m.dates.length - 1]) : '-'}</td><td>${m.sessions}</td><td class="${cls(m.total)}">${inr(m.total)}</td></tr></table></div>`; }
+    $('#b_labk').innerHTML = kpi('Gross P&L', inr(m.gross), 'before costs', cls(m.gross)) + kpi('Total costs', inr(m.costs), m.gross ? (m.costs / Math.abs(m.gross) * 100).toFixed(1) + '% of |gross|' : '') + kpi('Net P&L', inr(m.total), 'after costs', cls(m.total)) + kpi('Net ROI', pc(m.roi), 'on ' + inr(M.cap), cls(m.roi)) + kpi('Net Sharpe', m.sharpe.toFixed(2), 'daily ×√252') + kpi('Max drawdown', pc(-m.dd.maxPct), inr(-m.dd.max), 'neg');
     const gross = S.view === 'gross'; let cg = 0; const eqVals = gross ? M.days.map(d => (cg += d.gross)) : m.dd.cum;
     document.querySelectorAll('#b_view button').forEach(b => b.classList.toggle('on', b.dataset.view === S.view));
     C.line($('#b_eq'), { series: [{ name: gross ? 'Gross' : 'Net', color: (eqVals.length ? eqVals[eqVals.length - 1] : 0) >= 0 ? C.POS : C.NEG, vals: eqVals }], labels: m.dates, fmt: v => inr(v), title: 'Equity curve' });
@@ -254,9 +286,9 @@
     } else $('#b_ta').innerHTML = '<p class="sub">Not available: this report has no trade legs.</p>';
     // cost lab
     if (M.hasT) {
-      document.querySelectorAll('#b_lab .cslide').forEach(r => {
+      document.querySelectorAll('#b_lab .lab1').forEach(r => {
         const k = r.dataset.k, inp = r.querySelector('input'), out = r.querySelector('output'), set = S.cfg.settings[k], v = set != null ? set : labStart(M, k), u = LAB.find(x => x[0] === k)[5];
-        if (document.activeElement !== inp) inp.value = v; out.textContent = (set != null ? '' : 'backtest ') + (u === '₹' ? '₹' + (+v).toFixed(2) : (+v).toFixed(4).replace(/0+$/, '').replace(/\.$/, '') + '%'); out.style.color = set != null ? 'var(--ink)' : 'var(--mut)';
+        if (document.activeElement !== inp) inp.value = v; out.textContent = (u === '₹' ? '₹' + (+v).toFixed(2) : (+v).toFixed(4).replace(/0+$/, '').replace(/\.$/, '') + '%') + (set != null ? '' : ' (BACKTEST)'); out.style.color = set != null ? 'var(--ink)' : 'var(--mut)';
         r.querySelector('button').style.visibility = set != null ? 'visible' : 'hidden';
       });
       $('#b_stat').checked = S.cfg.statutory_on;
@@ -274,7 +306,7 @@
   let LM = null;
   function renderLive() {
     const el = $('#p_live');
-    if (!LIVE) { el.innerHTML = `<div class="card"><h2>Live results ${badge('lv')}</h2><p>${LIVE_ERR ? 'Live results could not be loaded: ' + esc(LIVE_ERR) : 'No live results have been published yet.'}</p><p class="sub">Live results start on their real start date. Nothing is back-filled.</p></div>`; return; }
+    if (!LIVE) { el.innerHTML = `<div class="card"><h2>Live results ${badge('lv')}</h2><p>${LIVE_ERR ? 'Live results could not be loaded: ' + esc(LIVE_ERR) : 'No live results have been published yet.'}</p>${DIAG ? '<p class="sub">' + esc(DIAG) + '. The site looks for <b>live/data.json</b> (the file from Export website data).</p>' : ''}<p class="sub">Live results start on their real start date. Nothing is back-filled.</p></div>`; return; }
     window.SLive.render(el, LIVE);
   }
 
@@ -284,7 +316,7 @@
     $('#p_about').innerHTML = `
     <div class="card"><h2>How the numbers are made</h2><ul>
      <li><b>Backtest vs live.</b> Backtests are simulated on historical data. Live results are entered by hand by the owner, net of charges. They are always shown separately and never joined into one curve.</li>
-     <li><b>Size and capital.</b> Non-directional (SIDDHI, a short strangle) trades 195 units per leg; each directional logic trades 65 units, the same in every year. Deployed capital: non-directional ${inr(400000)}, directional ${inr(100000)}, both together ${inr(400000)} (margin offset), not ${inr(500000)}. Size = floor(capital ÷ deployed).</li>
+     <li><b>Size and capital.</b> Non-directional trades 195 units per leg; each directional logic trades 65 units, the same in every year. Deployed capital: non-directional ${inr(400000)}, directional ${inr(100000)}, both together ${inr(400000)} (margin offset), not ${inr(500000)}. Size = floor(capital ÷ deployed).</li>
      <li><b>ROI and drawdown</b> are a % of the capital on the slider. Idle capital between size steps dilutes ROI. Drawdown is the fall from the highest cumulative P&amp;L, measured daily for intraday strategies (per trade for positional).</li>
      <li><b>Combining reports</b> from different runs uses common dates only; costs are summed.</li>
      <li><b>DTE</b> = trading sessions to expiry: expiry day 0, the session before 1; weekends and holidays are not counted.</li>
@@ -325,7 +357,7 @@
     if (t.dataset.view) { S.view = t.dataset.view; return BT && updateBT(BT); }
     if (t.dataset.per) { const live = t.closest('#l_seg'); if (live) S.lper = t.dataset.per; else S.per = t.dataset.per; return live ? renderLive() : BT && updateBT(BT); }
     if (t.dataset.clr) { S.cfg.settings[t.dataset.clr] = null; return renderBT(); }
-    if (t.id === 'b_reset') { S.cfg = E.defaultCfg(); return renderBT(); }
+    if (t.id === 'b_reset') { S.cfg = E.defaultCfg(); S.cap = null; return renderBT(); }
     if (t.dataset.share !== undefined) { sync(); if ($('#sh_cur')) $('#sh_cur').value = location.href; (navigator.clipboard ? navigator.clipboard.writeText(location.href) : Promise.reject()).then(() => { t.textContent = 'Link copied'; setTimeout(() => t.textContent = 'Copy share link', 1500); }, () => prompt('Copy this link', location.href)); return; }
     if (t.dataset.exp) { const p = t.dataset.p, root = $(p === 'bt' ? '#p_bt' : '#p_live'); if (t.dataset.exp === 'csv') return exportCSV(p); return snap(root, 'srisuutra_' + (p === 'bt' ? 'backtest' : 'live'), t.dataset.exp === 'pdf').catch(err => alert(err.message)); }
   });
@@ -335,9 +367,11 @@
     else if (t.id === 'l_cap') { S.lcap = +t.value; renderLive(); }
     else if (t.id === 'b_scale') { S.cfg.orders_scale_with_size = t.checked; BT && renderBT(); }
     else if (t.id === 'b_stat') { S.cfg.statutory_on = t.checked; BT && renderBT(); }
-    else if (t.closest && t.closest('#b_lab') && t.type === 'range') { S.cfg.settings[t.closest('.cslide').dataset.k] = +t.value; renderBT(); }
+    else if (t.closest && t.closest('#b_lab') && t.type === 'range') { S.cfg.settings[t.closest('[data-k]').dataset.k] = +t.value; renderBT(); }
     else if (/^(b_|l_)p[ft]$/.test(t.id)) { const live = t.id[0] === 'l'; if (live) { S[t.id === 'l_pf' ? 'lpf' : 'lpt'] = t.value; renderLive(); } else { S[t.id === 'b_pf' ? 'pf' : 'pt'] = t.value; BT && updateBT(BT); } }
   });
+
+  document.addEventListener('change', e => { if (e.target.id === 'b_capn') { S.cap = Math.max(0, +e.target.value || 0); renderBT(); } });
 
   /* ---------- gate + boot ---------- */
   function gate() {
@@ -350,7 +384,8 @@
     document.addEventListener('click', e => { if (e.target.id === 'reopen') { e.preventDefault(); $('#gate').style.display = 'flex'; $('#agree').onclick = () => { $('#gate').style.display = 'none'; }; } });
     $('#foot').innerHTML = '© SRISUUTRA ALGO TRADING. Information and education only; not investment advice or an offer to buy or sell. Backtest results are simulated; live results are owner-entered and unaudited. Past performance does not guarantee future results. Options trading carries a high risk of loss. <a href="#" id="reopen">Read the full disclaimer</a>';
     try { INDEX = await getJSON(INDEX_URL); if (!Array.isArray(INDEX)) throw new Error('index.json must be a list'); } catch (e) { IDX_ERR = 'The report list could not be loaded (' + e.message + '). If you opened this file directly from disk, serve it over http (GitHub Pages does this automatically).'; }
-    try { LIVE = await getJSON(LIVE_URL); if (!LIVE || !Array.isArray(LIVE.strat) || !LIVE.days) throw new Error('data.json is not in the expected format'); } catch (e) { LIVE = null; LIVE_ERR = /404/.test(e.message) ? '' : e.message; }
+    for (const u of LIVE_URLS) { try { const j = await getJSON(u); LIVE = asLive(j); if (!LIVE) throw new Error(u + ' is not in the expected live format'); LIVE_ERR = ''; break; } catch (e) { LIVE = null; if (!/\(404\)/.test(e.message)) LIVE_ERR = e.message; } }
+    if (!LIVE || !INDEX.length) await discover();
     if (!S.sel.length && INDEX.length) S.sel = [INDEX[0].id];
     S.sel = S.sel.filter(id => INDEX.some(x => x.id === id));
     let cfg = {}; try { cfg = await getJSON('config.json'); } catch (e) { /* optional */ }

@@ -93,3 +93,9 @@ nav.tabs button{white-space:nowrap}
 a.tg{margin-left:auto;white-space:nowrap;background:var(--gold);color:var(--navy);font-weight:700;text-decoration:none;padding:6px 14px;border-radius:20px;font-size:13px}
 a.tg[hidden]{display:none}
 button.sm.on{background:var(--navy);color:#fff}
+.labcap{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin:6px 0 12px}
+.labcap input[type=range]{flex:1;min-width:200px;width:auto}.labcap input[type=number]{width:130px}
+.labgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px 22px;margin:6px 0 10px}
+.lab1 label{display:block;font-size:11px;letter-spacing:.4px;color:var(--mut);margin-bottom:2px}
+.lab1 output{color:var(--ink);font-weight:700}
+.lab1 button{font-size:11px;padding:1px 7px;margin-top:2px}
