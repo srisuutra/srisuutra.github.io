@@ -51,7 +51,8 @@ See **Daily update** at the top of this file.
 - Custom domain: Settings → Pages → *Custom domain*.
 - If you add a Telegram link to the entry page's Links, it shows on the site.
 
-## F. Telegram
-- Link button on the site: in the daily tool, section 3 "Social media links", add a link named Telegram (https://t.me/yourchannel), tick it, export data.json and upload. The gold "Join Telegram" button then appears on the site. Or set it once in `config.json`: `{"telegram": "https://t.me/yourchannel"}`.
-- Daily post: in the daily tool, section 5 "Telegram", enter the bot token and channel once, then click "Send summary picture to Telegram" after exporting. The token stays in your browser only.
-- Share codes: the Share code column in section 1 of the tool; they show on the Share Codes tab of the site after export.
+## F. Share codes and Telegram
+- The **Share Codes** tab reads `share-codes.json` in the top folder of the repo. It lists your strategies; a blank code shows "Not published yet".
+- To add or change codes: open `local/share_codes_editor.html` (double-click), type the codes, add new strategies with **+ Add strategy**, click **Download share-codes.json**, then on GitHub use **Add file -> Upload files** to replace `share-codes.json` and commit. Or edit `share-codes.json` directly on GitHub with the pencil icon.
+- The **Join Telegram** button is on the Share Codes tab only. Its link is `config.json` -> `"telegram"`.
+- Daily Telegram post: in the daily tool (`local/daily_entry.html`), section 5, enter the bot token and channel once, then click "Send summary picture to Telegram".

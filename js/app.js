@@ -206,8 +206,11 @@
 
   /* ================= SHARE CODES ================= */
   function renderShare() {
-    const codes = (LIVE && LIVE.strat || []).filter(x => x.code);
-    $('#p_share').innerHTML = `<div class="card"><h2>Strategy share codes</h2><p class="sub">Copy a code to use it on your platform. Past performance does not guarantee future results.</p>${codes.length ? `<div class="scroll"><table class="t"><tr><th>Strategy</th><th>Exchange</th><th>Share code</th></tr>${codes.map(x => `<tr><td>${esc(x.name)}</td><td>${esc(x.ex || '-')}</td><td><span class="fp">${esc(x.code)}</span> <button class="sm" data-copycode="${esc(x.code)}">Copy</button></td></tr>`).join('')}</table></div>` : '<p>No share codes have been published yet.</p>'}</div>`;
+    let list = SHARE && Array.isArray(SHARE.strategies) ? SHARE.strategies : [];
+    if (!list.length && LIVE) list = (LIVE.strat || []).map(x => ({ name: x.name, exchange: x.ex, code: x.code }));
+    const btn = TGURL ? `<a class="tgbtn" href="${esc(TGURL)}" target="_blank" rel="noopener noreferrer">${TGSVG}Join Telegram</a>` : '';
+    $('#p_share').innerHTML = `<div class="card"><h2>Share codes</h2><p class="sub">Copy a strategy's share code to use it on your platform. Codes are published here when they are ready. This is information only, not advice; past performance does not guarantee future results.</p>${btn ? `<p>${btn}</p>` : ''}
+      ${list.length ? `<div class="scroll"><table class="t"><tr><th>Strategy</th><th>Exchange</th><th>Share code</th></tr>${list.map(x => `<tr><td>${esc(x.name || '')}</td><td>${x.exchange ? esc(x.exchange) : '-'}</td><td>${x.code ? `<span class="fp">${esc(x.code)}</span> <button class="sm" data-copycode="${esc(x.code)}">Copy</button>` : '<span class="sub">Not published yet</span>'}</td></tr>`).join('')}</table></div>` : '<p>No strategies listed yet.</p>'}</div>`;
   }
   function loadCode(txt) {
     txt = String(txt || '').trim(); if (!txt) return false;
@@ -380,14 +383,14 @@
     if (ok) return; $('#gate').style.display = 'flex';
     $('#agree').onclick = () => { try { localStorage.setItem('ghs_agreed', '1'); } catch (e) { /* ignore */ } $('#gate').style.display = 'none'; };
   }
-  const BUILD = '2026-11-01.10';
+  const BUILD = '2026-11-01.11';
   function loadAbs(src) { return new Promise((res, rej) => { const t = document.createElement('script'); t.src = src + '?v=' + BUILD; t.onload = res; t.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(t); }); }
-  const TGBTN = '<a id="tg" class="tgbtn" href="#" target="_blank" rel="noopener noreferrer" hidden><svg viewBox="0 0 24 24"><path d="M21.9 3.4 2.7 10.8c-1.3.5-1.3 1.3-.2 1.6l4.9 1.5 1.9 5.8c.2.6.1.9.8.9.5 0 .8-.2 1.1-.5l2.4-2.3 4.9 3.6c.9.5 1.5.2 1.7-.8l3-14.5c.3-1.2-.4-1.8-1.3-1.2zM8.6 13.2l9.6-6c.5-.3.9-.1.5.2l-8 7.2-.3 3.3z"/></svg>Join Telegram</a>';
+  const TGSVG = '<svg viewBox="0 0 24 24"><path d="M21.9 3.4 2.7 10.8c-1.3.5-1.3 1.3-.2 1.6l4.9 1.5 1.9 5.8c.2.6.1.9.8.9.5 0 .8-.2 1.1-.5l2.4-2.3 4.9 3.6c.9.5 1.5.2 1.7-.8l3-14.5c.3-1.2-.4-1.8-1.3-1.2zM8.6 13.2l9.6-6c.5-.3.9-.1.5.2l-8 7.2-.3 3.3z"/></svg>';
+  let TGURL = '', SHARE = null;
   /* Makes the page work even if an older index.html is still on the server. */
   async function ensureShell() {
     const L = [['live', 'Daily PnL Report'], ['strategy', 'Backtest Analysis'], ['trade', 'Trade Analytics'], ['cost', 'Cost Lab'], ['share', 'Share Codes'], ['about', 'Method & costs']];
     $('#tabs').innerHTML = L.map(x => `<button data-t="${x[0]}">${x[1]}</button>`).join('');
-    if (!$('#tg')) { const d = document.createElement('div'); d.className = 'wrap tgrow'; d.innerHTML = TGBTN; document.querySelector('main').before(d); }
     if (!$('#p_share')) { const sec = document.createElement('section'); sec.id = 'p_share'; sec.hidden = true; $('#p_about').before(sec); }
     if (!window.SLive) { try { await loadAbs('js/live.js'); } catch (e) { LIVE_ERR = e.message; } }
   }
@@ -402,9 +405,9 @@
     S.sel = S.sel.filter(id => INDEX.some(x => x.id === id));
     let cfg = {}; try { cfg = await getJSON('config.json'); } catch (e) { /* optional */ }
     const tl = cfg.telegram || ((LIVE && LIVE.links || []).find(l => /telegram|t\.me/i.test(l.label + l.url)) || {}).url;
-    if (tl && /^https?:\/\//i.test(tl)) { const a = $('#tg'); a.href = tl; a.hidden = false; }
+    if (tl && /^https?:\/\//i.test(tl)) TGURL = tl;
+    try { SHARE = await getJSON('share-codes.json'); } catch (e) { SHARE = null; }
     if (S.tab === 'live' && !LIVE && INDEX.length && !/[#&]s=/.test(location.hash)) S.tab = 'strategy';
-    if (!(LIVE && (LIVE.strat || []).some(x => x.code))) { const sb = document.querySelector('#tabs [data-t=share]'); if (sb) sb.remove(); if (S.tab === 'share') S.tab = 'live'; }
     $('#foot').insertAdjacentHTML('beforeend', `<div class="sub" style="margin-top:8px">Build ${BUILD} · reports found: ${INDEX.length} · live data: ${LIVE ? 'loaded (' + Object.keys(LIVE.days || {}).length + ' days)' : 'not found'}${DIAG ? ' · ' + esc(DIAG) : ''}</div>`);
     show(S.tab);
   }

@@ -1,0 +1,14 @@
+{
+ "strategies": [
+  {
+   "name": "Non-directional",
+   "exchange": "",
+   "code": ""
+  },
+  {
+   "name": "Directional",
+   "exchange": "",
+   "code": ""
+  }
+ ]
+}
