@@ -1,23 +1,25 @@
 /* SRISUUTRA ALGO TRADING - public site. Static, no build step, no server, no tokens.
  * Backtest reports: reports/index.json + reports/<id>/report.json (written by the GANITHAYYANTRA zip).
- * Live results:     live/live.json (written by local/daily_entry.html).
+ * Live results:     live/data.json (written by local/daily_entry.html, 'Export website data').
  */
 (function () {
   'use strict';
   const E = window.GHE, C = window.GC, esc = C.esc, inr = C.inr, pc = C.pc, cls = C.cls;
-  const LIVE_URL = 'live/live.json', INDEX_URL = 'reports/index.json';
+  const LIVE_URL = 'live/data.json', INDEX_URL = 'reports/index.json';
   const GROUP_NAME = { NONDIRECTIONAL: 'Non-directional', DIRECTIONAL: 'Directional' };
   const gname = g => GROUP_NAME[g] || g;
   const $ = s => document.querySelector(s);
   const REP = {}; let INDEX = [], LIVE = null, LIVE_ERR = '', IDX_ERR = '';
 
   /* ---------- state + share code ---------- */
+  const BT_TABS = ['strategy', 'monthly', 'combined', 'compare', 'drawdown', 'trade', 'combos', 'cost'], TABS = ['live', ...BT_TABS, 'share', 'about'];
   const S = { tab: 'live', sel: [], groups: null, cap: null, cfg: E.defaultCfg(), view: 'net', per: 'monthly', pf: '', pt: '', lcap: null, lgroups: null, lper: 'monthly', lpf: '', lpt: '' };
   function decode() {
-    try { const m = /[#&]s=([^&]+)/.exec(location.hash); if (!m) return; const o = JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')))));
+    try { const m = /[#&]s=([^&]+)/.exec(location.hash); if (!m) return false; const o = JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')))));
       ['tab', 'sel', 'groups', 'cap', 'view', 'per', 'lcap', 'lgroups', 'lper'].forEach(k => { if (o[k] !== undefined) S[k] = o[k]; });
       if (o.cfg) { S.cfg.settings = Object.assign(E.nullSettings(), o.cfg.settings || {}); S.cfg.statutory_on = o.cfg.statutory_on !== false; S.cfg.orders_scale_with_size = o.cfg.orders_scale_with_size !== false; }
-    } catch (e) { /* ignore bad share code */ }
+      if (S.tab === 'bt') S.tab = 'strategy'; if (!TABS.includes(S.tab)) S.tab = 'live'; return true;
+    } catch (e) { return false; }
   }
   function encode() {
     const o = { tab: S.tab, sel: S.sel, groups: S.groups, cap: S.cap, view: S.view, per: S.per, cfg: S.cfg, lcap: S.lcap, lgroups: S.lgroups, lper: S.lper };
@@ -114,7 +116,7 @@
      <div class="row" style="margin-top:8px"><b style="font-size:13px">Strategy groups</b><span id="b_groups" class="row"></span></div>
      <div class="note">Directional = the six logics, always together. <b>Call selling is bearish; put selling is bullish.</b> Per-logic detail is not published.</div>
      <div id="b_meta" class="sub"></div></div>
-    <div id="b_body"></div>`;
+    <div id="b_body"></div><div data-sec="combos" id="b_combos"></div>`;
     $('#b_reports').innerHTML = INDEX.map(x => `<span class="chip ${S.sel.includes(x.id) ? 'on' : ''}" data-rep="${esc(x.id)}" title="${esc(x.id)}">${esc(x.title)} <small>${esc(x.range.start)} to ${esc(x.range.end)}</small></span>`).join('');
   }
 
@@ -128,7 +130,61 @@
     $('#b_meta').innerHTML = M.reps.map(r => `<div><b>${esc(r.title)}</b> | ${fdate(r.range.start)} to ${fdate(r.range.end)} | generated ${esc(r.generated_at || '-')} | fingerprints: <span class="fp">${esc(Object.keys((r.provenance || {}).fingerprints || {}).length ? JSON.stringify(r.provenance.fingerprints) : 'none recorded')}</span></div>`).join('') + (M.reps.some(r => /SAMPLE|synthetic/i.test(r.title + (r.disclaimer || ''))) ? '<div class="note warn"><b>This is a synthetic sample report, not real results.</b></div>' : '');
     if (M.empty) { body.innerHTML = '<div class="card"><p>Select at least one strategy group.</p></div>'; return; }
     if (!body.dataset.built || body.dataset.sig !== S.sel.join('|') + '#' + M.groups.join('|')) { buildBTBody(M); body.dataset.built = 1; body.dataset.sig = S.sel.join('|') + '#' + M.groups.join('|'); }
-    updateBT(M); sync();
+    updateBT(M); applyView(); if (S.tab === 'combos') renderCombos(); sync();
+  }
+
+  function applyView() { document.querySelectorAll('#p_bt [data-sec]').forEach(e => e.classList.toggle('vh', !e.dataset.sec.split(' ').includes(S.tab))); }
+
+  /* ---------- Combos: every report x group combination, ranked ---------- */
+  let COMBOS = null, CSORT = 'rd';
+  function comboModel(reps, groups) {
+    const extra = {}; reps.forEach(r => r.strategies.forEach(s => { extra[s.id] = s.capital; }));
+    const dep = E.deployed(groups, extra); if (!dep) return null;
+    const comb = E.combineReports(reps, groups); let days;
+    if (comb.atoms.length) days = E.dailyFromPriced(comb.sessions, E.repriceAtoms(comb.atoms, E.defaultCfg(), 1));
+    else if (reps.length === 1) days = reps[0].daily.filter(d => comb.sessions.includes(d.date)); else return null;
+    if (!days.length) return null; const m = E.metrics(days, dep);
+    return { net: m.total, roi: m.roi, dd: m.dd.maxPct, rd: m.dd.maxPct > 0 ? m.roi / m.dd.maxPct : 0, win: m.winPct, sharpe: m.sharpe, n: m.sessions, dep };
+  }
+  async function renderCombos() {
+    const box = $('#b_combos'); if (!box || !INDEX.length) return;
+    if (!COMBOS) {
+      box.innerHTML = '<div class="card"><h2>Combos</h2><p>Calculating every combination...</p></div>';
+      const ids = INDEX.slice(0, 6).map(x => x.id); for (const id of ids) { try { await loadReport(id); } catch (e) { /* skip */ } }
+      const list = ids.filter(id => REP[id]), out = [];
+      for (let mask = 1; mask < (1 << list.length); mask++) {
+        const sub = list.filter((id, i) => mask & (1 << i)), reps = sub.map(id => REP[id]), av = [...new Set(reps.flatMap(r => r.strategies.map(x => x.id)))];
+        for (let gm = 1; gm < (1 << av.length); gm++) {
+          const groups = av.filter((g, i) => gm & (1 << i)); let r = null; try { r = comboModel(reps, groups); } catch (e) { r = null; }
+          if (r) out.push(Object.assign(r, { sub, groups }));
+        }
+        await new Promise(res => setTimeout(res, 0));
+      }
+      COMBOS = out;
+    }
+    const rows = COMBOS.slice().sort((a, b) => CSORT === 'dd' ? a.dd - b.dd : b[CSORT] - a[CSORT]);
+    const head = (k, l) => `<th><button class="sm ${CSORT === k ? 'on' : ''}" data-csort="${k}">${l}</button></th>`;
+    box.innerHTML = `<div class="card"><h2>Combos ${badge('bt')}</h2><p class="sub">Every combination of the published reports and strategy groups, at 1× size on its deployed capital with the backtest's own costs. Combined reports use common dates only. Sort with the column buttons; <b>Open</b> shows that combination in full.</p>
+      ${rows.length ? `<div class="scroll"><table class="t"><tr><th>Combination</th>${head('net', 'Net P&amp;L')}${head('roi', 'ROI')}${head('dd', 'Max DD')}${head('rd', 'ROI ÷ DD')}${head('win', 'Win days')}${head('sharpe', 'Sharpe')}<th>Sessions</th><th></th></tr>` +
+      rows.map((r, i) => `<tr><td style="white-space:normal;text-align:left">${r.sub.map(id => esc((REP[id] || {}).title || id)).join(' + ')}<br><small>${r.groups.map(gname).join(' + ')}</small></td><td class="${cls(r.net)}">${inr(r.net)}</td><td class="${cls(r.roi)}">${pc(r.roi)}</td><td class="neg">${pc(-r.dd)}</td><td>${r.rd.toFixed(2)}</td><td>${r.win.toFixed(1)}%</td><td>${r.sharpe.toFixed(2)}</td><td>${r.n}</td><td><button class="sm" data-copen="${COMBOS.indexOf(r)}">Open</button></td></tr>`).join('') + '</table></div>' : '<p>No combinations could be calculated.</p>'}
+      <p class="sub">Past performance, simulated. Ranking by the best historical result invites over-fitting; it is not a recommendation.</p></div>`;
+  }
+
+  /* ================= SHARE CODES ================= */
+  function renderShare() {
+    sync(); const codes = (LIVE && LIVE.strat || []).filter(x => x.code);
+    $('#p_share').innerHTML = `<div class="card"><h2>Share this view</h2><p class="sub">The code holds your selections: tab, reports, groups, capital and cost settings. Anyone who opens the link or pastes the code sees the same numbers.</p>
+      <div class="row"><input id="sh_cur" readonly style="flex:1;min-width:240px" value="${esc(location.href)}"><button class="pri" data-share>Copy share link</button></div></div>
+     <div class="card"><h2>Paste a share code or link</h2><div class="row"><input id="sh_in" placeholder="Paste a share code or a full link" style="flex:1;min-width:240px"><button class="gold" id="sh_go">Load</button></div><p class="sub" id="sh_msg"></p></div>
+     ${codes.length ? `<div class="card"><h2>Strategy share codes</h2><div class="scroll"><table class="t"><tr><th>Strategy</th><th>Share code</th></tr>${codes.map(x => `<tr><td>${esc(x.name)}</td><td><span class="fp">${esc(x.code)}</span> <button class="sm" data-copycode="${esc(x.code)}">Copy</button></td></tr>`).join('')}</table></div></div>` : ''}`;
+  }
+  function loadCode(txt) {
+    txt = String(txt || '').trim(); if (!txt) return false;
+    const m = /[#&?]s=([A-Za-z0-9_\-=+/]+)/.exec(txt), code = m ? m[1] : txt;
+    const keep = location.hash; try { history.replaceState(null, '', '#s=' + code); } catch (e) { return false; }
+    const bak = JSON.stringify([S.tab, S.sel, S.groups, S.cap, S.cfg]); S.sel = []; S.groups = null; S.cap = null; S.cfg = E.defaultCfg();
+    if (!decode()) { const o = JSON.parse(bak); S.tab = o[0]; S.sel = o[1]; S.groups = o[2]; S.cap = o[3]; S.cfg = o[4]; try { history.replaceState(null, '', keep || '#'); } catch (e) { /* ignore */ } return false; }
+    $('#b_body') && ($('#b_body').dataset.sig = ''); return true;
   }
 
   const LAB = [ // key, label, min, max, step, unit
@@ -140,19 +196,20 @@
   function buildBTBody(M) {
     const slidersOn = M.hasT;
     $('#b_body').innerHTML = `
-    <div class="card"><h2>Capital ${badge('bt')}</h2>
+    <div class="card" data-sec="strategy combined"><h2>Capital ${badge('bt')}</h2>
      <p class="sub">Size = floor(capital ÷ deployed). Deployed capital for this selection: <b>${inr(M.dep)}</b>. Between steps the extra capital sits idle, so ROI and drawdown (a % of the capital chosen here) are diluted.</p>
      <div class="cslide" style="grid-template-columns:90px 1fr 120px 90px"><span>Capital</span><input type="range" id="b_cap" min="${M.dep}" max="${M.dep * 5}" step="10000"><output id="b_capv"></output><span id="b_k"></span></div>
      <label><input type="checkbox" id="b_scale"> Orders scale with size (each set is its own orders). Untick for “one bigger order per leg”, where per-order brokerage does not scale.</label></div>
-    <div class="kpis" id="b_kpis"></div>
-    <div class="grid2">${chart('b_eq', 'Equity curve (cumulative P&L)', 'bt')}${chart('b_dd', 'Drawdown (% of capital)', 'bt')}</div>
-    <div class="row noprint"><div class="seg" id="b_view"><button data-view="net">Net of costs</button><button data-view="gross">Gross (before costs)</button></div></div>
-    <div class="grid2" style="margin-top:14px">${chart('b_mon', 'Monthly net P&L', 'bt')}<div class="card"><h2>P&amp;L calendar ${badge('bt')}</h2><div id="b_cal"></div></div></div>
-    ${periodsHTML('b_', 'bt')}
-    <div class="card"><h2>Drawdown analytics ${badge('bt')}</h2><div id="b_dda"></div></div>
-    <div class="card" id="b_cmp_card"><h2>Compare groups ${badge('bt')}</h2><div id="b_cmp"></div></div>
-    <div class="card"><h2>Trade analytics ${badge('bt')}</h2><div id="b_ta"></div></div>
-    <div class="card"><h2>Cost Lab ${badge('bt')} <button class="sm noprint" id="b_reset">Reset to backtest</button></h2>
+    <div class="kpis" id="b_kpis" data-sec="strategy combined"></div>
+    <div class="card" id="b_combined" data-sec="combined"></div>
+    <div class="grid2" data-sec="strategy combined">${chart('b_eq', 'Equity curve (cumulative P&L)', 'bt')}${chart('b_dd', 'Drawdown (% of capital)', 'bt')}</div>
+    <div class="row noprint" data-sec="strategy combined"><div class="seg" id="b_view"><button data-view="net">Net of costs</button><button data-view="gross">Gross (before costs)</button></div></div>
+    <div class="grid2" data-sec="monthly">${chart('b_mon', 'Monthly net P&L', 'bt')}<div class="card"><h2>P&amp;L calendar ${badge('bt')}</h2><div id="b_cal"></div></div></div>
+    <div data-sec="monthly">${periodsHTML('b_', 'bt')}</div>
+    <div class="card" data-sec="drawdown"><h2>Drawdown analytics ${badge('bt')}</h2><div id="b_dda"></div></div>
+    <div class="card" id="b_cmp_card" data-sec="compare"><h2>Compare groups ${badge('bt')}</h2><div id="b_cmp"></div></div>
+    <div class="card" data-sec="trade"><h2>Trade analytics ${badge('bt')}</h2><div id="b_ta"></div></div>
+    <div class="card" data-sec="cost"><h2>Cost Lab ${badge('bt')} <button class="sm noprint" id="b_reset">Reset to backtest</button></h2>
      <p class="sub">Costs are modelled. A slider left at <b>backtest</b> uses the backtest's own dated charges; moving it re-prices that line on a linear model. Cost sliders apply to backtests only; live results are real money.</p>
      ${slidersOn ? `<div id="b_lab"></div><div class="row"><label><input type="checkbox" id="b_stat"> Statutory charges on (STT, exchange, SEBI, stamp, IPFT)</label></div>` : '<div class="note warn">Not available: this report has no trade legs.</div>'}
      <div class="grid2" style="margin-top:10px"><div id="b_costtbl" class="scroll"></div><div><div id="b_costchart"></div><div id="b_be"></div></div></div></div>`;
@@ -169,6 +226,8 @@
     $('#b_kpis').innerHTML = kpi('Net P&L', inr(m.total), pc(m.roi) + ' ROI on ' + inr(M.cap), cls(m.total)) + kpi('Max drawdown', pc(-m.dd.maxPct), inr(-m.dd.max) + ' | ' + M.basis + ' basis', 'neg') + kpi('Current drawdown', pc(-m.dd.curPct), inr(-m.dd.cur), m.dd.cur > 0 ? 'neg' : '') +
       kpi('Win days', m.winPct.toFixed(1) + '%', m.tradingDays + ' trading days / ' + m.sessions + ' sessions') + kpi('Sharpe (daily, ×√252)', m.sharpe.toFixed(2), 'on daily net') +
       kpi('Best day', inr(m.best ? m.best.net : 0), m.best ? fdate(m.best.date) : '', 'pos') + kpi('Worst day', inr(m.worst ? m.worst.net : 0), m.worst ? fdate(m.worst.date) : '', 'neg') + kpi('Costs', inr(m.costs), m.gross ? (m.costs / Math.abs(m.gross) * 100).toFixed(0) + '% of |gross|' : '');
+    { const rr = M.reps.map(r => { const n = r.daily.reduce((t, d) => t + d.net, 0); return `<tr><td>${esc(r.title)}</td><td>${fdate(r.range.start)} to ${fdate(r.range.end)}</td><td>${r.daily.length}</td><td class="${cls(n)}">${inr(n)}</td></tr>`; }).join('');
+      $('#b_combined').innerHTML = `<h2>Combined view ${badge('bt')}</h2><p class="sub">${M.reps.length > 1 ? 'Reports are combined on <b>common dates only</b>, so the combined figure is not the plain sum of the rows below.' : 'One report selected. Pick more reports above to combine them on common dates.'} Report rows are at 1× size, backtest costs.</p><div class="scroll"><table class="t"><tr><th>Report</th><th>Range</th><th>Sessions</th><th>Net P&amp;L (1×)</th></tr>${rr}<tr class="tt"><td>Combined: ${M.groups.map(gname).join(' + ')}</td><td>${m.dates.length ? fdate(m.dates[0]) + ' to ' + fdate(m.dates[m.dates.length - 1]) : '-'}</td><td>${m.sessions}</td><td class="${cls(m.total)}">${inr(m.total)}</td></tr></table></div>`; }
     const gross = S.view === 'gross'; let cg = 0; const eqVals = gross ? M.days.map(d => (cg += d.gross)) : m.dd.cum;
     document.querySelectorAll('#b_view button').forEach(b => b.classList.toggle('on', b.dataset.view === S.view));
     C.line($('#b_eq'), { series: [{ name: gross ? 'Gross' : 'Net', color: (eqVals.length ? eqVals[eqVals.length - 1] : 0) >= 0 ? C.POS : C.NEG, vals: eqVals }], labels: m.dates, fmt: v => inr(v), title: 'Equity curve' });
@@ -213,60 +272,10 @@
 
   /* ================= LIVE ================= */
   let LM = null;
-  function liveModel() {
-    if (!LIVE) return null;
-    const strat = LIVE.strategies || [], ids = strat.map(s => s.id), groups = ids.filter(g => !S.lgroups || S.lgroups.includes(g)); if (!groups.length) return { empty: true, strat, ids, groups };
-    const extra = {}; strat.forEach(s => { extra[s.id] = s.capital; });
-    const dep = E.deployed(groups, extra) || strat.filter(s => groups.includes(s.id)).reduce((t, s) => t + s.capital, 0), cap = Math.max(dep, S.lcap || dep), k = E.sizeK(cap, dep);
-    const dates = Object.keys(LIVE.days).sort(), asof = LIVE.asof && dates.includes(LIVE.asof) ? LIVE.asof : dates[dates.length - 1];
-    const ds = dates.filter(d => d <= asof), val = (d, g) => { const v = (LIVE.days[d] || {})[g]; return v == null || v === '' ? null : +v; };
-    const per = groups.map(g => { const nets = ds.map(d => (val(d, g) || 0) * k), c = E.deployed([g], extra) * k || (extra[g] || 0) * k; return { g, nets, c, m: E.metrics(ds.map((d, i) => ({ date: d, net: nets[i], gross: nets[i], costs: 0, trades: val(d, g) != null ? 1 : 0 })), c) }; });
-    const tn = ds.map((d, i) => per.reduce((t, p) => t + p.nets[i], 0)), tdays = ds.map((d, i) => ({ date: d, net: tn[i], gross: tn[i], costs: 0, trades: groups.some(g => val(d, g) != null) ? 1 : 0 })), tm = E.metrics(tdays, cap);
-    return { strat, ids, groups, extra, dep, cap, k, ds, asof, per, tm, tn, val };
-  }
-  function slice(m, asof, kind) { // today / month / ytd net for metrics m
-    const s = f => m.dates.reduce((t, d, i) => t + (f(d) ? m.nets[i] : 0), 0);
-    return kind === 'day' ? s(d => d === asof) : kind === 'mo' ? s(d => ym(d) === ym(asof)) : s(d => d.slice(0, 4) === asof.slice(0, 4));
-  }
-
   function renderLive() {
     const el = $('#p_live');
     if (!LIVE) { el.innerHTML = `<div class="card"><h2>Live results ${badge('lv')}</h2><p>${LIVE_ERR ? 'Live results could not be loaded: ' + esc(LIVE_ERR) : 'No live results have been published yet.'}</p><p class="sub">Live results start on their real start date. Nothing is back-filled.</p></div>`; return; }
-    const M = LM = liveModel();
-    if (!el.dataset.built) {
-      el.dataset.built = 1;
-      el.innerHTML = `<div class="card"><h2>Daily P&amp;L report ${badge('lv')} ${exportRow('lv')}</h2><p class="sub" id="l_meta"></p><div class="row"><b style="font-size:13px">Strategy groups</b><span id="l_groups" class="row"></span></div></div>
-       <div class="card"><h2>Capital ${badge('lv')}</h2><p class="sub">Live P&amp;L is entered at 1× and scaled by size = floor(capital ÷ deployed). ROI and drawdown are a % of the capital chosen here. Cost sliders do <b>not</b> apply to live results: they are real, net of charges.</p>
-        <div class="cslide" style="grid-template-columns:90px 1fr 120px 90px"><span>Capital</span><input type="range" id="l_cap" step="10000"><output id="l_capv"></output><span id="l_k"></span></div></div>
-       <div class="kpis" id="l_kpis"></div><div class="card"><h2>Report ${badge('lv')}</h2><div class="scroll" id="l_rpt"></div></div>
-       <div class="card" id="l_tgt" hidden><h2>Monthly target ${badge('lv')}</h2><div id="l_tgtb"></div></div>
-       <div class="grid2">${chart('l_eq', 'Cumulative return (% of capital)', 'lv')}${chart('l_dd', 'Drawdown (% of capital)', 'lv')}</div>
-       <div class="grid2" style="margin-top:14px">${chart('l_mon', 'Monthly net P&L', 'lv')}<div class="card"><h2>P&amp;L calendar ${badge('lv')}</h2><div id="l_cal"></div></div></div>
-       ${periodsHTML('l_', 'lv')}<div class="card"><h2>Drawdown analytics ${badge('lv')}</h2><div id="l_dda"></div></div>
-       <div class="card" id="l_corr"></div><div class="card" id="l_extra"></div>`;
-    }
-    if (M.empty) { $('#l_meta').textContent = 'Select at least one strategy group.'; }
-    $('#l_groups').innerHTML = M.ids.map(g => { const s = M.strat.find(x => x.id === g); return `<span class="chip ${M.groups.includes(g) ? 'on' : ''}" data-lgrp="${g}">${esc(s.name || gname(g))}${s.retired ? ' (retired)' : ''}</span>`; }).join('');
-    if (M.empty) return;
-    const T = M.tm, a = M.asof;
-    $('#l_meta').innerHTML = `As of <b>${fdate(a)}</b> | ${M.strat.filter(s => M.groups.includes(s.id)).map(s => esc(s.name) + ' since ' + fdate(s.started) + (s.retired ? ' (retired ' + fdate(s.retired_on) + ')' : '')).join(', ')}. Entries are net P&amp;L as shown by the broker, charges already deducted. Not audited.`;
-    const cp = $('#l_cap'); cp.min = M.dep; cp.max = M.dep * 5; cp.value = M.cap; $('#l_capv').textContent = inr(M.cap); $('#l_k').textContent = M.k + '× size';
-    const day = slice(T, a, 'day'), mo = slice(T, a, 'mo'), yr = slice(T, a, 'yr');
-    $('#l_kpis').innerHTML = kpi('Capital deployed', inr(M.cap), M.groups.map(gname).join(' + ')) + kpi('Today', inr(day), pc(day / M.cap * 100), cls(day)) + kpi(new Date(a + 'T00:00:00Z').toLocaleString('en-IN', { month: 'long', timeZone: 'UTC' }), inr(mo), pc(mo / M.cap * 100), cls(mo)) + kpi('Year to date', inr(yr), pc(yr / M.cap * 100), cls(yr)) + kpi('Max drawdown', pc(-T.dd.maxPct), inr(-T.dd.max), 'neg') + kpi('Win days', T.winPct.toFixed(1) + '%', T.tradingDays + ' days entered');
-    const rows = [['Today P&L', m => slice(m, a, 'day'), inr], ['Today ROI', (m, c) => slice(m, a, 'day') / c * 100, pc], ['Month P&L', m => slice(m, a, 'mo'), inr], ['Month ROI', (m, c) => slice(m, a, 'mo') / c * 100, pc], ['YTD P&L', m => slice(m, a, 'yr'), inr], ['YTD ROI', (m, c) => slice(m, a, 'yr') / c * 100, pc], ['All-time P&L', m => m.total, inr], ['Current drawdown ₹', m => -m.dd.cur, inr], ['Current drawdown %', m => -m.dd.curPct, pc], ['Max drawdown ₹', m => -m.dd.max, inr], ['Max drawdown %', m => -m.dd.maxPct, pc]];
-    $('#l_rpt').innerHTML = `<table class="t"><tr><th>Metric</th>${M.per.map(p => `<th>${esc((M.strat.find(s => s.id === p.g) || {}).name || p.g)}</th>`).join('')}<th class="ct">CUMULATIVE</th></tr>` +
-      rows.map((r, i) => `<tr class="${i < 2 ? 'hl' : ''}"><td>${r[0]}</td>${M.per.map(p => { const v = r[1](p.m, p.c); return `<td class="${cls(v)}">${r[2](v)}</td>`; }).join('')}${(() => { const v = r[1](T, M.cap); return `<td class="ct ${cls(v)}">${r[2](v)}</td>`; })()}</tr>`).join('') +
-      `</table><p class="sub">Each strategy column uses its own deployed capital × size; the cumulative column uses the capital chosen above. Drawdown = fall from the highest cumulative P&amp;L, as a % of capital.</p>`;
-    const tgt = (LIVE.settings || {}).monthly_target; $('#l_tgt').hidden = !(tgt > 0);
-    if (tgt > 0) { const t = tgt * M.k, p = Math.max(0, Math.min(100, mo / t * 100)); $('#l_tgtb').innerHTML = `<div class="prog"><i style="width:${p}%"></i></div><p class="sub">${inr(mo)} of a ${inr(t)} monthly target (${(mo / t * 100).toFixed(0)}%). The target is the owner's own goal, not a forecast.</p>`; }
-    let cum = 0; C.line($('#l_eq'), { series: [{ name: 'Cumulative return', color: T.total >= 0 ? C.POS : C.NEG, vals: T.nets.map(v => (cum += v) / M.cap * 100) }], labels: T.dates, fmt: v => v.toFixed(2) + '%', title: 'Cumulative return' });
-    C.line($('#l_dd'), { series: [{ name: 'Drawdown', color: C.GOLD, vals: T.dd.ddPct.map(v => -v) }], labels: T.dates, fmt: v => v.toFixed(2) + '%', title: 'Drawdown' });
-    C.bars($('#l_mon'), { labels: T.monthly.map(r => mlabel(r.key)), vals: T.monthly.map(r => r.net), fmt: v => inr(v), title: 'Monthly net' });
-    C.calendar($('#l_cal'), T.dates, T.nets, M.cap); renderPeriods('l_', T, S.lper, S.lpf, S.lpt, M.cap); $('#l_dda').innerHTML = ddAnalyticsHTML(T.dd);
-    const cl = LIVE.corrections || [];
-    $('#l_corr').innerHTML = `<h2>Corrections log ${badge('lv')}</h2><p class="sub">Past days must not change silently. Every correction to an entered figure is listed here.</p>` + (cl.length ? `<div class="scroll"><table class="t"><tr><th>Date</th><th>Strategy</th><th>Old</th><th>New</th><th>Reason</th><th>Recorded</th></tr>` + cl.map(c => `<tr><td>${esc(c.date)}</td><td>${esc(gname(c.strategy))}</td><td>${inr(c.old, 2)}</td><td>${inr(c.new, 2)}</td><td style="white-space:normal;text-align:left">${esc(c.reason || '')}</td><td>${esc(c.at || '')}</td></tr>`).join('') + '</table></div>' : '<p>No corrections have been made.</p>');
-    const notes = LIVE.notes || [], links = LIVE.links || [];
-    $('#l_extra').innerHTML = (notes.length ? `<h2>Notes</h2>${notes.map(n => `<div class="note">${esc(n)}</div>`).join('')}` : '') + (links.length ? `<h2>Links</h2>${links.map(l => /^https?:\/\//i.test(l.url) ? `<div><a href="${esc(l.url)}" rel="noopener noreferrer" target="_blank">${esc(l.label)}</a></div>` : '').join('')}` : '') || ''; sync();
+    window.SLive.render(el, LIVE);
   }
 
   /* ================= ABOUT ================= */
@@ -292,18 +301,24 @@
 
   /* ================= tabs + events ================= */
   function show(t) {
+    if (t === 'bt') t = 'strategy'; if (!TABS.includes(t)) t = 'live';
     S.tab = t; document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
-    ['live', 'bt', 'about'].forEach(x => { $('#p_' + x).hidden = x !== t; });
-    if (t === 'bt') renderBT(); else if (t === 'live') renderLive(); else renderAbout(); sync();
+    const page = t === 'live' ? 'live' : BT_TABS.includes(t) ? 'bt' : t;
+    ['live', 'bt', 'share', 'about'].forEach(x => { $('#p_' + x).hidden = x !== page; });
+    if (page === 'bt') { applyView(); renderBT(); } else if (page === 'live') renderLive(); else if (page === 'share') renderShare(); else renderAbout(); sync();
   }
   function exportCSV(prefix) {
     if (prefix === 'bt' && BT && !BT.empty) { const m = BT.m; C.download('srisuutra_backtest_daily.csv', C.csv([['date', 'gross', 'costs', 'net', 'cumulative_net', 'drawdown_pct_of_capital', 'label'], ...m.dates.map((d, i) => [d, BT.days[i].gross.toFixed(2), BT.days[i].costs.toFixed(2), BT.days[i].net.toFixed(2), m.dd.cum[i].toFixed(2), (-m.dd.ddPct[i]).toFixed(4), 'BACKTEST'])]));
       C.download('srisuutra_backtest_monthly.csv', C.csv([['month', 'net', 'roi_pct', 'label'], ...m.monthly.map(r => [r.key, r.net.toFixed(2), r.roi.toFixed(4), 'BACKTEST'])])); }
-    if (prefix === 'lv' && LM && !LM.empty) { const T = LM.tm; C.download('srisuutra_live_daily.csv', C.csv([['date', ...LM.groups, 'total', 'cumulative', 'drawdown_pct_of_capital', 'label'], ...T.dates.map((d, i) => [d, ...LM.per.map(p => p.nets[i].toFixed(2)), T.nets[i].toFixed(2), T.dd.cum[i].toFixed(2), (-T.dd.ddPct[i]).toFixed(4), 'LIVE'])])); }
+    if (prefix === 'lv') window.SLive.csv();
   }
   document.addEventListener('click', e => {
     const t = e.target.closest('button,.chip,a'); if (!t) return;
     if (t.dataset.t) return show(t.dataset.t);
+    if (t.dataset.csort) { CSORT = t.dataset.csort; return renderCombos(); }
+    if (t.dataset.copen !== undefined) { const c = COMBOS[+t.dataset.copen]; S.sel = c.sub.slice(); S.groups = c.groups.slice(); S.cap = null; const bb = $('#b_body'); if (bb) bb.dataset.sig = ''; return show('strategy'); }
+    if (t.dataset.copycode !== undefined) { try { navigator.clipboard.writeText(t.dataset.copycode); t.textContent = 'Copied'; setTimeout(() => t.textContent = 'Copy', 1500); } catch (x) { prompt('Copy this code', t.dataset.copycode); } return; }
+    if (t.id === 'sh_go') { const ok = loadCode($('#sh_in').value); if (!ok) { $('#sh_msg').innerHTML = '<span class="neg">That code could not be read. Paste the whole link or the code after <b>s=</b>.</span>'; return; } return show(S.tab === 'share' ? 'strategy' : S.tab); }
     if (t.dataset.rep) { const id = t.dataset.rep, i = S.sel.indexOf(id); if (i >= 0) S.sel.splice(i, 1); else S.sel.push(id); S.groups = null; S.cap = null; $('#b_body').dataset.sig = ''; return renderBT(); }
     if (t.dataset.grp) { const all = BT ? BT.avail : []; let g = S.groups ? S.groups.slice() : all.slice(); const i = g.indexOf(t.dataset.grp); if (i >= 0) g.splice(i, 1); else g.push(t.dataset.grp); S.groups = g; S.cap = null; return renderBT(); }
     if (t.dataset.lgrp) { const all = LM ? LM.ids : []; let g = S.lgroups ? S.lgroups.slice() : all.slice(); const i = g.indexOf(t.dataset.lgrp); if (i >= 0) g.splice(i, 1); else g.push(t.dataset.lgrp); S.lgroups = g; S.lcap = null; return renderLive(); }
@@ -311,7 +326,7 @@
     if (t.dataset.per) { const live = t.closest('#l_seg'); if (live) S.lper = t.dataset.per; else S.per = t.dataset.per; return live ? renderLive() : BT && updateBT(BT); }
     if (t.dataset.clr) { S.cfg.settings[t.dataset.clr] = null; return renderBT(); }
     if (t.id === 'b_reset') { S.cfg = E.defaultCfg(); return renderBT(); }
-    if (t.dataset.share !== undefined) { sync(); (navigator.clipboard ? navigator.clipboard.writeText(location.href) : Promise.reject()).then(() => { t.textContent = 'Link copied'; setTimeout(() => t.textContent = 'Copy share link', 1500); }, () => prompt('Copy this link', location.href)); return; }
+    if (t.dataset.share !== undefined) { sync(); if ($('#sh_cur')) $('#sh_cur').value = location.href; (navigator.clipboard ? navigator.clipboard.writeText(location.href) : Promise.reject()).then(() => { t.textContent = 'Link copied'; setTimeout(() => t.textContent = 'Copy share link', 1500); }, () => prompt('Copy this link', location.href)); return; }
     if (t.dataset.exp) { const p = t.dataset.p, root = $(p === 'bt' ? '#p_bt' : '#p_live'); if (t.dataset.exp === 'csv') return exportCSV(p); return snap(root, 'srisuutra_' + (p === 'bt' ? 'backtest' : 'live'), t.dataset.exp === 'pdf').catch(err => alert(err.message)); }
   });
   document.addEventListener('input', e => {
@@ -335,10 +350,13 @@
     document.addEventListener('click', e => { if (e.target.id === 'reopen') { e.preventDefault(); $('#gate').style.display = 'flex'; $('#agree').onclick = () => { $('#gate').style.display = 'none'; }; } });
     $('#foot').innerHTML = '© SRISUUTRA ALGO TRADING. Information and education only; not investment advice or an offer to buy or sell. Backtest results are simulated; live results are owner-entered and unaudited. Past performance does not guarantee future results. Options trading carries a high risk of loss. <a href="#" id="reopen">Read the full disclaimer</a>';
     try { INDEX = await getJSON(INDEX_URL); if (!Array.isArray(INDEX)) throw new Error('index.json must be a list'); } catch (e) { IDX_ERR = 'The report list could not be loaded (' + e.message + '). If you opened this file directly from disk, serve it over http (GitHub Pages does this automatically).'; }
-    try { LIVE = await getJSON(LIVE_URL); if (LIVE.format !== 'ganithayyantra-live' || LIVE.version !== 1) throw new Error('unsupported live.json format'); } catch (e) { LIVE = null; LIVE_ERR = /404/.test(e.message) ? '' : e.message; }
+    try { LIVE = await getJSON(LIVE_URL); if (!LIVE || !Array.isArray(LIVE.strat) || !LIVE.days) throw new Error('data.json is not in the expected format'); } catch (e) { LIVE = null; LIVE_ERR = /404/.test(e.message) ? '' : e.message; }
     if (!S.sel.length && INDEX.length) S.sel = [INDEX[0].id];
     S.sel = S.sel.filter(id => INDEX.some(x => x.id === id));
-    if (S.tab === 'live' && !LIVE && INDEX.length) S.tab = 'bt';
+    let cfg = {}; try { cfg = await getJSON('config.json'); } catch (e) { /* optional */ }
+    const tl = cfg.telegram || ((LIVE && LIVE.links || []).find(l => /telegram|t\.me/i.test(l.label + l.url)) || {}).url;
+    if (tl && /^https?:\/\//i.test(tl)) { const a = $('#tg'); a.href = tl; a.hidden = false; }
+    if (S.tab === 'live' && !LIVE && INDEX.length) S.tab = 'strategy';
     show(S.tab);
   }
   // Period selector for the live tab needs its own id; renderPeriods builds ids from the prefix ('l_seg').

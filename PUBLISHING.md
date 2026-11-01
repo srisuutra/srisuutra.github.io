@@ -1,3 +1,24 @@
+# Updating the site when you get a new zip
+
+1. Unzip the new `srisuutra-site.zip` to your Desktop.
+2. Open your cloned `srisuutra.github.io` folder (GitHub Desktop: Repository -> Show in Explorer).
+3. Select everything inside the unzipped folder, copy, paste into the cloned folder, choose **Replace the files in the destination**.
+4. **Do not overwrite your own data.** If Windows asks about `reports/index.json` or anything inside `reports/` or `live/`, choose **Skip** (or **Don't copy**) so your published reports and `live/data.json` stay. Also keep your `config.json` if you edited it.
+5. GitHub Desktop lists only the files that really changed. Summary `Update site` -> **Commit to main** -> **Push origin**. Live in about a minute (Ctrl+F5).
+
+Telegram button: it appears by itself when your `data.json` has a link named Telegram. Or put the link in `config.json` as `{"telegram": "https://t.me/yourchannel"}`.
+
+# Daily update (about 2 minutes)
+
+1. Open `local/daily_entry.html` in Chrome (double-click; it works from your computer, needs internet once for the export libraries).
+2. Pick today's date under "Daily P/L at 1X", type each strategy's net P&L, set "As of" to today.
+3. Click **Export website data (data.json)**. Also click **Save Excel (database)** and keep that file as your master copy.
+4. Copy the downloaded `data.json` into the `live` folder of the cloned `srisuutra.github.io` folder, replacing the old one.
+5. GitHub Desktop: summary `Update 2026-11-02` -> **Commit to main** -> **Push origin**.
+6. About a minute later https://srisuutra.github.io/ shows the new numbers (press Ctrl+F5 if you still see old ones).
+
+Links (Telegram etc.), notes, strategy names, exchange (NFO/MCX) and share codes are set in the same page and go out inside `data.json`. Only ticked links and notes are published.
+
 # Publishing on GitHub, step by step (GitHub Desktop, no command line)
 
 ## A. One-time setup (you already have the account and repos)
@@ -16,15 +37,12 @@ Use the repo **srisuutra.github.io**. A repo with exactly this name is your pers
 4. GitHub Desktop → review the changed files → summary `Add report <id>` → *Commit to main* → *Push origin*. The site updates in about a minute.
 
 ## C. Adding live results (each trading day)
-1. Open `local/daily_entry.html` from your repo folder (double-click). On a new computer, click *Load live.json* first and pick `live/live.json`.
-2. Enter the day's net P&L for each strategy. Click *Save live.json* (it locks the days).
-3. Move the downloaded `live.json` into the `live` folder, replacing the old file.
-4. GitHub Desktop → commit `Live P&L <date>` → *Push origin*.
-5. Keep your Excel master file **outside** the repo folder (the repo ignores `.xlsx` anyway).
+See **Daily update** at the top of this file.
+
+- Keep your Excel master file **outside** the repo folder (the repo ignores `.xlsx` anyway).
 
 ## D. Safety checklist
 - Never put a GitHub token, bot token or password in any file. The site and entry page need none.
-- Telegram token: typed only into the entry page; never saved to live.json or Excel.
 - Everything in the repo is public, including history. Don't commit client data, broker statements or screenshots with account numbers.
 - Mistakes: use *Revert* in GitHub Desktop, but remember old versions stay in history.
 - Never silently change a past day. Use *correct* in the entry page so the public corrections log shows it.
