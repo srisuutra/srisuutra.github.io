@@ -1,12 +1,17 @@
 {
  "strategies": [
   {
-   "name": "Non-directional",
+   "name": "Nifty Non Directional Intraday",
    "exchange": "",
    "code": ""
   },
   {
-   "name": "Directional",
+   "name": "Nifty Bullish Intraday (Pyramid L1-L3)",
+   "exchange": "",
+   "code": ""
+  },
+  {
+   "name": "Nifty Bearish Intraday (Pyramid L1-L3)",
    "exchange": "",
    "code": ""
   }
