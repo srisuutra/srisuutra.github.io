@@ -12,13 +12,13 @@
   const REP = {}; let INDEX = [], LIVE = null, LIVE_ERR = '', IDX_ERR = '';
 
   /* ---------- state + share code ---------- */
-  const BT_TABS = ['strategy', 'monthly', 'combined', 'compare', 'drawdown', 'trade', 'combos', 'cost'], TABS = ['live', ...BT_TABS, 'share', 'about'];
+  const BT_TABS = ['strategy', 'trade', 'cost'], LEGACY = ['monthly', 'combined', 'compare', 'drawdown', 'combos', 'bt'], TABS = ['live', ...BT_TABS, 'share', 'about'];
   const S = { tab: 'live', sel: [], groups: null, cap: null, cfg: E.defaultCfg(), view: 'net', per: 'monthly', pf: '', pt: '', lcap: null, lgroups: null, lper: 'monthly', lpf: '', lpt: '' };
   function decode() {
     try { const m = /[#&]s=([^&]+)/.exec(location.hash); if (!m) return false; const o = JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')))));
       ['tab', 'sel', 'groups', 'cap', 'view', 'per', 'lcap', 'lgroups', 'lper'].forEach(k => { if (o[k] !== undefined) S[k] = o[k]; });
       if (o.cfg) { S.cfg.settings = Object.assign(E.nullSettings(), o.cfg.settings || {}); S.cfg.statutory_on = o.cfg.statutory_on !== false; S.cfg.orders_scale_with_size = o.cfg.orders_scale_with_size !== false; }
-      if (S.tab === 'bt') S.tab = 'strategy'; if (!TABS.includes(S.tab)) S.tab = 'live'; return true;
+      if (LEGACY.includes(S.tab)) S.tab = 'strategy'; if (!TABS.includes(S.tab)) S.tab = 'live'; return true;
     } catch (e) { return false; }
   }
   function encode() {
@@ -52,7 +52,7 @@
       try {
         const j = await getJSON(f);
         if (j && j.format === 'ganithayyantra-report' && j.version === 1 && !INDEX.some(x => x.id === (j.id || f))) {
-          const id = j.id || f; INDEX.push({ id, title: j.title || id, range: j.range || { start: '', end: '' }, strategies: (j.strategies || []).map(x => x.id), file: f }); j.trades = j.trades || []; REP[id] = j;
+          const id = j.id || f; INDEX.push({ id, title: j.title || id, range: j.range || { start: '', end: '' }, strategies: (j.strategies || []).map(x => x.id), file: f }); j.trades = (j.trades || []).map(normWhy); REP[id] = j;
         } else if (!LIVE) { const l = asLive(j); if (l) { LIVE = l; LIVE_ERR = ''; } }
       } catch (e) { /* not a usable file */ }
     }
@@ -61,11 +61,15 @@
 
   /* ---------- loading ---------- */
   async function getJSON(u) { const r = await fetch(u, { cache: 'no-cache' }); if (!r.ok) throw new Error(u + ' (' + r.status + ')'); return r.json(); }
+  /* Exit reasons are shown as broad categories only; the exact rules and thresholds are not published. */
+  function normWhy(t) {
+    const w = String(t.why || ''); t.why = /time exit/i.test(w) ? 'Time exit' : /mtm/i.test(w) ? 'MTM drawdown exit' : /hedge/i.test(w) ? 'Hedge exit' : /stop/i.test(w) ? 'Stop-loss exit' : /rapid|imbalance/i.test(w) ? 'Market-move exit' : w ? 'Other exit' : 'Unspecified'; return t;
+  }
   async function loadReport(id) {
     if (REP[id]) return REP[id];
     const ix = INDEX.find(x => x.id === id), r = await getJSON(ix ? ix.file : 'reports/' + id + '/report.json');
     if (r.format !== 'ganithayyantra-report' || r.version !== 1) throw new Error('Unsupported report format in ' + id);
-    r.trades = r.trades || []; REP[id] = r; return r;
+    r.trades = (r.trades || []).map(normWhy); REP[id] = r; return r;
   }
   function loadScript(file, url) {
     return new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'vendor/' + file;
@@ -147,7 +151,7 @@
      <div class="row" style="margin-top:8px"><b style="font-size:13px">Strategy groups</b><span id="b_groups" class="row"></span></div>
      <div class="note">Directional = the six logics, always together. <b>Call selling is bearish; put selling is bullish.</b> Per-logic detail is not published.</div>
      <div id="b_meta" class="sub"></div></div>
-    <div id="b_body"></div><div data-sec="combos" id="b_combos"></div>`;
+    <div id="b_body"></div>`;
     $('#b_reports').innerHTML = INDEX.map(x => `<span class="chip ${S.sel.includes(x.id) ? 'on' : ''}" data-rep="${esc(x.id)}" title="${esc(x.id)}">${esc(x.title)} <small>${esc(x.range.start)} to ${esc(x.range.end)}</small></span>`).join('');
   }
 
@@ -161,7 +165,7 @@
     $('#b_meta').innerHTML = M.reps.map(r => `<div><b>${esc(r.title)}</b> | ${fdate(r.range.start)} to ${fdate(r.range.end)} | generated ${esc(r.generated_at || '-')} | source files fingerprinted: ${Object.keys((r.provenance || {}).fingerprints || {}).length || 'none recorded'}</div>`).join('') + (M.reps.some(r => /SAMPLE|synthetic/i.test(r.title + (r.disclaimer || ''))) ? '<div class="note warn"><b>This is a synthetic sample report, not real results.</b></div>' : '');
     if (M.empty) { body.innerHTML = '<div class="card"><p>Select at least one strategy group.</p></div>'; return; }
     if (!body.dataset.built || body.dataset.sig !== S.sel.join('|') + '#' + M.groups.join('|')) { buildBTBody(M); body.dataset.built = 1; body.dataset.sig = S.sel.join('|') + '#' + M.groups.join('|'); }
-    updateBT(M); applyView(); if (S.tab === 'combos') renderCombos(); sync();
+    updateBT(M); applyView(); sync();
   }
 
   function applyView() { document.querySelectorAll('#p_bt [data-sec]').forEach(e => e.classList.toggle('vh', !e.dataset.sec.split(' ').includes(S.tab))); }
@@ -227,20 +231,20 @@
   function buildBTBody(M) {
     const slidersOn = M.hasT;
     $('#b_body').innerHTML = `
-    <div class="card" id="b_panel" data-sec="strategy monthly combined compare drawdown trade cost"><h2>Cost Lab: capital and costs ${badge('bt')}</h2>
+    <div class="card" id="b_panel" data-sec="strategy cost"><h2>Cost Lab: capital and costs ${badge('bt')}</h2>
      <p class="sub">Every slider opens at what the backtest actually charged (STT and exchange at their turnover-weighted average of the dated rates). A slider you have not moved keeps the backtest's own figure, line by line; move it and that line is re-priced on a linear model. <b>Every number, chart and table on this page updates as you move a slider.</b> Capital: size = whole multiples of the deployed capital (<b>${inr(M.dep)}</b>); ROI and drawdown are a % of the capital on the slider.</p>
      <div class="labcap"><b>Capital (₹)</b><input type="range" id="b_cap" min="${M.dep}" max="${M.dep * 5}" step="10000"><input type="number" id="b_capn" min="${M.dep}" step="10000"><span class="sub">Deployed ${inr(M.dep)} → trading <b id="b_k"></b></span><output id="b_capv" hidden></output></div>
      ${slidersOn ? '<div id="b_lab" class="labgrid"></div>' : '<div class="note warn">Cost sliders are not available: this report was exported without trade legs. Capital still works.</div>'}
      <div class="row" style="margin:8px 0">${slidersOn ? '<label><input type="checkbox" id="b_stat"> Apply statutory charges (STT / exchange / SEBI / GST / stamp / IPFT)</label>' : ''}<label><input type="checkbox" id="b_scale"> At 2×, 3× … capital each set is its own orders (every output scales; untick: one bigger order per leg)</label><button class="sm" id="b_reset">Reset all to the backtest</button><button class="sm" data-share>Copy share link</button>
       <span class="seg" id="b_view"><button data-view="net">Net of costs</button><button data-view="gross">Gross (before costs)</button></span></div>
      <div class="kpis" id="b_labk"></div></div>
-    <div class="kpis" id="b_kpis" data-sec="strategy combined"></div>
-    <div class="card" id="b_combined" data-sec="combined"></div>
-    <div class="grid2" data-sec="strategy combined">${chart('b_eq', 'Equity curve (cumulative P&L)', 'bt')}${chart('b_dd', 'Drawdown (% of capital)', 'bt')}</div>
-    <div class="grid2" data-sec="monthly">${chart('b_mon', 'Monthly net P&L', 'bt')}<div class="card"><h2>P&amp;L calendar ${badge('bt')}</h2><div id="b_cal"></div></div></div>
-    <div data-sec="monthly">${periodsHTML('b_', 'bt')}</div>
-    <div class="card" data-sec="drawdown"><h2>Drawdown analytics ${badge('bt')}</h2><div id="b_dda"></div></div>
-    <div class="card" id="b_cmp_card" data-sec="compare"><h2>Compare groups ${badge('bt')}</h2><div id="b_cmp"></div></div>
+    <div class="kpis" id="b_kpis" data-sec="strategy"></div>
+    <div class="card" id="b_combined" data-sec="strategy"></div>
+    <div class="grid2" data-sec="strategy">${chart('b_eq', 'Equity curve (cumulative P&L)', 'bt')}${chart('b_dd', 'Drawdown (% of capital)', 'bt')}</div>
+    <div class="grid2" data-sec="strategy">${chart('b_mon', 'Monthly net P&L', 'bt')}<div class="card"><h2>P&amp;L calendar, last 12 months ${badge('bt')}</h2><div id="b_cal"></div></div></div>
+    <div data-sec="strategy">${periodsHTML('b_', 'bt')}</div>
+    <div class="card" data-sec="strategy"><h2>Drawdown analytics ${badge('bt')}</h2><div id="b_dda"></div></div>
+    <div class="card" id="b_cmp_card" data-sec="strategy"><h2>Compare groups ${badge('bt')}</h2><div id="b_cmp"></div></div>
     <div class="card" data-sec="trade"><h2>Trade analytics ${badge('bt')}</h2><div id="b_ta"></div></div>
     <div class="card" data-sec="cost"><h2>Cost breakdown ${badge('bt')}</h2>
      <p class="sub">Move the sliders in the panel above. This section breaks the charges down line by line against the backtest's own figures.</p>
@@ -259,6 +263,7 @@
       kpi('Win days', m.winPct.toFixed(1) + '%', m.tradingDays + ' trading days / ' + m.sessions + ' sessions') + kpi('Sharpe (daily, ×√252)', m.sharpe.toFixed(2), 'on daily net') +
       kpi('Best day', inr(m.best ? m.best.net : 0), m.best ? fdate(m.best.date) : '', 'pos') + kpi('Worst day', inr(m.worst ? m.worst.net : 0), m.worst ? fdate(m.worst.date) : '', 'neg') + kpi('Costs', inr(m.costs), m.gross ? (m.costs / Math.abs(m.gross) * 100).toFixed(0) + '% of |gross|' : '');
     { const rr = M.reps.map(r => { const n = r.daily.reduce((t, d) => t + d.net, 0); return `<tr><td>${esc(r.title)}</td><td>${fdate(r.range.start)} to ${fdate(r.range.end)}</td><td>${r.daily.length}</td><td class="${cls(n)}">${inr(n)}</td></tr>`; }).join('');
+      $('#b_combined').hidden = M.reps.length < 2;
       $('#b_combined').innerHTML = `<h2>Combined view ${badge('bt')}</h2><p class="sub">${M.reps.length > 1 ? 'Reports are combined on <b>common dates only</b>, so the combined figure is not the plain sum of the rows below.' : 'One report selected. Pick more reports above to combine them on common dates.'} Report rows are at 1× size, backtest costs.</p><div class="scroll"><table class="t"><tr><th>Report</th><th>Range</th><th>Sessions</th><th>Net P&amp;L (1×)</th></tr>${rr}<tr class="tt"><td>Combined: ${M.groups.map(gname).join(' + ')}</td><td>${m.dates.length ? fdate(m.dates[0]) + ' to ' + fdate(m.dates[m.dates.length - 1]) : '-'}</td><td>${m.sessions}</td><td class="${cls(m.total)}">${inr(m.total)}</td></tr></table></div>`; }
     $('#b_labk').innerHTML = kpi('Gross P&L', inr(m.gross), 'before costs', cls(m.gross)) + kpi('Total costs', inr(m.costs), m.gross ? (m.costs / Math.abs(m.gross) * 100).toFixed(1) + '% of |gross|' : '') + kpi('Net P&L', inr(m.total), 'after costs', cls(m.total)) + kpi('Net ROI', pc(m.roi), 'on ' + inr(M.cap), cls(m.roi)) + kpi('Net Sharpe', m.sharpe.toFixed(2), 'daily ×√252') + kpi('Max drawdown', pc(-m.dd.maxPct), inr(-m.dd.max), 'neg');
     const gross = S.view === 'gross'; let cg = 0; const eqVals = gross ? M.days.map(d => (cg += d.gross)) : m.dd.cum;
@@ -266,7 +271,7 @@
     C.line($('#b_eq'), { series: [{ name: gross ? 'Gross' : 'Net', color: (eqVals.length ? eqVals[eqVals.length - 1] : 0) >= 0 ? C.POS : C.NEG, vals: eqVals }], labels: m.dates, fmt: v => inr(v), title: 'Equity curve' });
     C.line($('#b_dd'), { series: [{ name: 'Drawdown', color: C.GOLD, vals: m.dd.ddPct.map(v => -v) }], labels: m.dates, fmt: v => v.toFixed(2) + '%', title: 'Drawdown' });
     C.bars($('#b_mon'), { labels: m.monthly.map(r => mlabel(r.key)), vals: m.monthly.map(r => r.net), fmt: v => inr(v), title: 'Monthly net' });
-    C.calendar($('#b_cal'), m.dates, m.nets, M.cap);
+    { const n0 = Math.max(0, m.dates.length - 252); C.calendar($('#b_cal'), m.dates.slice(n0), m.nets.slice(n0), M.cap); }
     renderPeriods('b_', m, S.per, S.pf, S.pt, M.cap);
     $('#b_dda').innerHTML = ddAnalyticsHTML(m.dd);
     // compare groups
@@ -307,7 +312,7 @@
   let LM = null;
   function renderLive() {
     const el = $('#p_live');
-    if (!LIVE) { el.innerHTML = `<div class="card"><h2>Live results ${badge('lv')}</h2><p>${LIVE_ERR ? 'Live results could not be loaded: ' + esc(LIVE_ERR) : 'No live results have been published yet.'}</p>${DIAG ? '<p class="sub">' + esc(DIAG) + '. The site looks for <b>live/data.json</b> (the file from Export website data).</p>' : ''}<p class="sub">Live results start on their real start date. Nothing is back-filled.</p></div>`; return; }
+    if (!LIVE) { el.innerHTML = `<div class="card"><h2>Live results ${badge('lv')}</h2><p>${LIVE_ERR ? 'Live results could not be loaded: ' + esc(LIVE_ERR) : 'No live results have been published yet.'}</p>${DIAG ? '<p class="sub">' + esc(DIAG) + '. The site looks for <b>live/data.json</b> (the file from Export website data).</p>' : ''}<p class="sub">Live results start on their real start date. Nothing is back-filled. The Backtest Analysis tab shows simulated results only.</p></div>`; return; }
     window.SLive.render(el, LIVE);
   }
 
@@ -334,7 +339,7 @@
 
   /* ================= tabs + events ================= */
   function show(t) {
-    if (t === 'bt') t = 'strategy'; if (!TABS.includes(t)) t = 'live';
+    if (LEGACY.includes(t)) t = 'strategy'; if (!TABS.includes(t)) t = 'live';
     S.tab = t; document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
     const page = t === 'live' ? 'live' : BT_TABS.includes(t) ? 'bt' : t;
     ['live', 'bt', 'share', 'about'].forEach(x => { $('#p_' + x).hidden = x !== page; });
@@ -380,11 +385,11 @@
     if (ok) return; $('#gate').style.display = 'flex';
     $('#agree').onclick = () => { try { localStorage.setItem('ghs_agreed', '1'); } catch (e) { /* ignore */ } $('#gate').style.display = 'none'; };
   }
-  const BUILD = '2026-11-01.7';
+  const BUILD = '2026-11-01.8';
   function loadAbs(src) { return new Promise((res, rej) => { const t = document.createElement('script'); t.src = src + '?v=' + BUILD; t.onload = res; t.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(t); }); }
   /* Makes the page work even if an older index.html is still on the server. */
   async function ensureShell() {
-    const L = [['live', 'Daily PnL Report'], ['strategy', 'Strategy Analysis'], ['monthly', 'Monthly Performance'], ['combined', 'Combined'], ['compare', 'Compare'], ['drawdown', 'Drawdown Analytics'], ['trade', 'Trade Analytics'], ['combos', 'Combos'], ['cost', 'Cost Lab'], ['share', 'Share Codes'], ['about', 'Method & costs']];
+    const L = [['live', 'Daily PnL Report'], ['strategy', 'Backtest Analysis'], ['trade', 'Trade Analytics'], ['cost', 'Cost Lab'], ['share', 'Share Codes'], ['about', 'Method & costs']];
     $('#tabs').innerHTML = L.map(x => `<button data-t="${x[0]}">${x[1]}</button>`).join('') + '<a id="tg" class="tg" href="#" target="_blank" rel="noopener noreferrer" hidden>Join Telegram</a>';
     if (!$('#p_share')) { const sec = document.createElement('section'); sec.id = 'p_share'; sec.hidden = true; $('#p_about').before(sec); }
     if (!window.SLive) { try { await loadAbs('js/live.js'); } catch (e) { LIVE_ERR = e.message; } }
@@ -401,7 +406,7 @@
     let cfg = {}; try { cfg = await getJSON('config.json'); } catch (e) { /* optional */ }
     const tl = cfg.telegram || ((LIVE && LIVE.links || []).find(l => /telegram|t\.me/i.test(l.label + l.url)) || {}).url;
     if (tl && /^https?:\/\//i.test(tl)) { const a = $('#tg'); a.href = tl; a.hidden = false; }
-    if (S.tab === 'live' && !LIVE && INDEX.length) S.tab = 'strategy';
+    if (S.tab === 'live' && !LIVE && INDEX.length && !/[#&]s=/.test(location.hash)) S.tab = 'strategy';
     $('#foot').insertAdjacentHTML('beforeend', `<div class="sub" style="margin-top:8px">Build ${BUILD} · reports found: ${INDEX.length} · live data: ${LIVE ? 'loaded (' + Object.keys(LIVE.days || {}).length + ' days)' : 'not found'}${DIAG ? ' · ' + esc(DIAG) : ''}</div>`);
     show(S.tab);
   }
