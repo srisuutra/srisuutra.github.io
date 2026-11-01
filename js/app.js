@@ -303,7 +303,6 @@
       const t = E.tradeStats(M.pos), tb = (rows, lab) => `<h3>${lab}</h3><table class="t"><tr><th>${lab.split(' ')[1] || ''}</th><th>Trades</th><th>Net</th><th>Win %</th></tr>` + rows.map(r => `<tr><td>${esc(r.key)}</td><td>${r.n}</td><td class="${cls(r.net)}">${inr(r.net)}</td><td>${(r.wins / r.n * 100).toFixed(0)}%</td></tr>`).join('') + '</table>';
       $('#b_ta').innerHTML = `<p class="sub">A trade = all legs sharing one id. Figures are net of the costs in the Cost Lab settings.</p><div class="kpis">${kpi('Trades', t.count)}${kpi('Win rate', t.winRate.toFixed(1) + '%')}${kpi('Average win', inr(t.avgWin), '', 'pos')}${kpi('Average loss', inr(t.avgLoss), '', 'neg')}${kpi('Expectancy / trade', inr(t.expectancy), '', cls(t.expectancy))}${kpi('Profit factor', t.profitFactor == null ? '-' : t.profitFactor.toFixed(2))}${kpi('Longest win / loss streak', t.maxWinStreak + ' / ' + t.maxLossStreak)}${kpi('Best / worst trade', inr(t.bestTrade) + ' / ' + inr(t.worstTrade))}</div>
        <div class="grid3"><div>${tb(t.byWeekday, 'By weekday')}</div><div>${tb(t.byDTE, 'By DTE (sessions to expiry)')}</div><div>${tb(t.byHour, 'By entry hour')}</div></div>
-       ${recon(M)}
        <p class="sub">DTE = trading sessions to expiry (expiry day 0, session before 1, and so on); weekends and holidays are not counted. Taken from the report as given.</p>`;
     } else $('#b_ta').innerHTML = '<p class="sub">Not available: this report has no trade legs.</p>';
     // cost lab

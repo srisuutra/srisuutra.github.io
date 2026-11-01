@@ -28,6 +28,20 @@ $('go').onclick=()=>{try{
  const map={};let n=0;(o.trades||[]).forEach(t=>{const p=String(t.id).split('|');if(p.length<3)return;const tok=p[1];if(map[tok])return;map[tok]=t.g==='NONDIRECTIONAL'?'ND':'D'+(++n)});
  let text=RAW;Object.keys(map).sort((a,b)=>b.length-a.length).forEach(k=>{text=text.split(k).join(map[k])});
  const p=JSON.parse(text);(p.strategies||[]).forEach(s=>{s.note=s.name||''});
+ // publish ONLY the parallel book of the directional group (sold, strangle and hedge legs are dropped); non-directional is kept as is
+ const before=(p.trades||[]).length;const keep=(p.trades||[]).filter(t=>t.g!=='DIRECTIONAL'||t.s==='PARALLEL');p.trades=keep;
+ const r2=x=>Math.round(x*100)/100,dm=new Map();(p.daily||[]).forEach(d=>dm.set(d.date,{date:d.date,gross:0,costs:0,net:0,ids:new Set()}));
+ keep.forEach(t=>{const r=dm.get(t.x);if(!r)return;r.gross+=t.gross;r.net+=t.net;r.costs+=t.gross-t.net;r.ids.add(t.id)});
+ p.daily=[...dm.values()].map(r=>({date:r.date,gross:r2(r.gross),costs:r2(r.costs),net:r2(r.net),trades:r.ids.size}));
+ const sm=p.summary||(p.summary={}),T=sm.totals||(sm.totals={}),sum=k=>r2(keep.reduce((a,t)=>a+(t[k]||0),0)),cap=sm.capital;
+ T.gross=sum('gross');T.brokerage=sum('brk');T.stt=sum('stt');T.exchange=sum('exchange');T.sebi=sum('sebi');T.stamp=sum('stamp');T.ipft=sum('ipft');T.gst=sum('gst');T.other=0;T.other_charges=sum('oc');T.net=sum('net');T.costs=r2(T.gross-T.net);T.turnover=r2(keep.reduce((a,t)=>a+(t.tb||0)+(t.ts||0),0));
+ sm.roi_pct=r2(T.net/cap*100);let cum=0,pk=0,mdd=0;p.daily.forEach(d=>{cum+=d.net;pk=Math.max(pk,cum);mdd=Math.max(mdd,pk-cum)});sm.max_drawdown=r2(mdd);sm.max_drawdown_pct=r2(mdd/cap*100);
+ const td=p.daily.filter(d=>d.trades>0);sm.trading_days=td.length;sm.win_days_pct=Math.round(td.filter(d=>d.net>0).length/td.length*1000)/10;
+ sm.best_day=td.reduce((a,b)=>b.net>a.net?b:a);sm.worst_day=td.reduce((a,b)=>b.net<a.net?b:a);
+ const bg={};keep.forEach(t=>{const b=bg[t.g]||(bg[t.g]={gross:0,costs:0,net:0,legs:0});b.gross+=t.gross;b.net+=t.net;b.legs++});Object.values(bg).forEach(b=>{b.costs=r2(b.gross-b.net);b.gross=r2(b.gross);b.net=r2(b.net)});sm.by_group=bg;
+ ['monthly','yearly','by_dte','sharpe','current_drawdown','current_drawdown_pct','breakeven_slippage_pct'].forEach(k=>delete sm[k]);
+ p.legs=[...new Set(keep.map(t=>t.s))].sort();
+ log('Kept the parallel book only for Directional: '+keep.length+' of '+before+' leg rows published; the other legs were dropped.','ok');
  const id=p.id||('report_'+Date.now()),out=JSON.stringify(p),leaks=Object.keys(map).filter(k=>out.includes(k));
  log('Replaced '+Object.keys(map).length+' internal names with neutral labels.','ok');if(leaks.length)log('Warning: some names are still present: '+leaks.join(', '),'bad');
  const net=(p.summary&&p.summary.totals&&p.summary.totals.net),roi=p.summary&&p.summary.roi_pct;

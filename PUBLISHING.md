@@ -56,3 +56,7 @@ See **Daily update** at the top of this file.
 - To add or change codes: open `local/share_codes_editor.html` (double-click), type the codes, add new strategies with **+ Add strategy**, click **Download share-codes.json**, then on GitHub use **Add file -> Upload files** to replace `share-codes.json` and commit. Or edit `share-codes.json` directly on GitHub with the pencil icon.
 - The **Join Telegram** button is on the Share Codes tab only. Its link is `config.json` -> `"telegram"`.
 - Daily Telegram post: in the daily tool (`local/daily_entry.html`), section 5, enter the bot token and channel once, then click "Send summary picture to Telegram".
+
+
+## Only the parallel book is published
+`local/prepare_report.html` keeps ONLY the parallel-book legs of the Directional group (sold, strangle/core and hedge legs are dropped) and recomputes daily P&L, totals and drawdown from what remains. Non-directional is published as is. Never upload a raw backtest report.
