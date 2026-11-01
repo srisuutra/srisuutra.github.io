@@ -45,8 +45,9 @@
     let paths = null;
     for (const br of ['main', 'master']) { try { const j = await getJSON('https://api.github.com/repos/' + repo + '/git/trees/' + br + '?recursive=1'); paths = j.tree.filter(x => x.type === 'blob').map(x => x.path); break; } catch (e) { /* try next */ } }
     if (!paths) return;
-    const js = paths.filter(x => /\.json$/i.test(x) && !/(^|\/)(config|package|package-lock|index)\.json$/i.test(x) && !/^(vendor|tests|tools|node_modules)\//.test(x)).slice(0, 40);
-    DIAG = js.length ? 'JSON files found in the repository: ' + js.join(', ') : 'No JSON data files were found anywhere in the repository.';
+    const js = paths.filter(x => /\.(json|txt)$/i.test(x) && !/(^|\/)(config|package|package-lock|index)\.json$/i.test(x) && !/^(vendor|tests|tools|node_modules)\//.test(x)).slice(0, 40);
+    const known = /^(assets|css|js|vendor|tests|tools|local)\/|^(index\.html|README\.md|PUBLISHING\.md|config\.json|\.gitignore|\.nojekyll)$|\.gitkeep$|(^|\/)index\.json$/;
+    DIAG = js.length ? 'Data files found in the repository: ' + js.join(', ') : 'No data files were found in the repository. Files that are there: ' + (paths.filter(x => !known.test(x)).slice(0, 30).join(', ') || '(only the site files; nothing was added to live/ or reports/)');
     for (const f of js) {
       try {
         const j = await getJSON(f);
@@ -157,7 +158,7 @@
     const M = BT = btModel(), body = $('#b_body');
     if (!M) { $('#b_groups').innerHTML = ''; $('#b_meta').textContent = ''; body.innerHTML = '<div class="card"><p>Select a report above.</p></div>'; return; }
     $('#b_groups').innerHTML = M.avail.map(g => `<span class="chip ${M.groups.includes(g) ? 'on' : ''}" data-grp="${g}">${esc(gname(g))}</span>`).join('');
-    $('#b_meta').innerHTML = M.reps.map(r => `<div><b>${esc(r.title)}</b> | ${fdate(r.range.start)} to ${fdate(r.range.end)} | generated ${esc(r.generated_at || '-')} | fingerprints: <span class="fp">${esc(Object.keys((r.provenance || {}).fingerprints || {}).length ? JSON.stringify(r.provenance.fingerprints) : 'none recorded')}</span></div>`).join('') + (M.reps.some(r => /SAMPLE|synthetic/i.test(r.title + (r.disclaimer || ''))) ? '<div class="note warn"><b>This is a synthetic sample report, not real results.</b></div>' : '');
+    $('#b_meta').innerHTML = M.reps.map(r => `<div><b>${esc(r.title)}</b> | ${fdate(r.range.start)} to ${fdate(r.range.end)} | generated ${esc(r.generated_at || '-')} | source files fingerprinted: ${Object.keys((r.provenance || {}).fingerprints || {}).length || 'none recorded'}</div>`).join('') + (M.reps.some(r => /SAMPLE|synthetic/i.test(r.title + (r.disclaimer || ''))) ? '<div class="note warn"><b>This is a synthetic sample report, not real results.</b></div>' : '');
     if (M.empty) { body.innerHTML = '<div class="card"><p>Select at least one strategy group.</p></div>'; return; }
     if (!body.dataset.built || body.dataset.sig !== S.sel.join('|') + '#' + M.groups.join('|')) { buildBTBody(M); body.dataset.built = 1; body.dataset.sig = S.sel.join('|') + '#' + M.groups.join('|'); }
     updateBT(M); applyView(); if (S.tab === 'combos') renderCombos(); sync();
@@ -379,7 +380,7 @@
     if (ok) return; $('#gate').style.display = 'flex';
     $('#agree').onclick = () => { try { localStorage.setItem('ghs_agreed', '1'); } catch (e) { /* ignore */ } $('#gate').style.display = 'none'; };
   }
-  const BUILD = '2026-11-01.5';
+  const BUILD = '2026-11-01.7';
   function loadAbs(src) { return new Promise((res, rej) => { const t = document.createElement('script'); t.src = src + '?v=' + BUILD; t.onload = res; t.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(t); }); }
   /* Makes the page work even if an older index.html is still on the server. */
   async function ensureShell() {
