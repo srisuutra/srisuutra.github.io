@@ -154,6 +154,21 @@
     $('#b_reports').innerHTML = INDEX.map(x => `<span class="chip ${S.sel.includes(x.id) ? 'on' : ''}" data-rep="${esc(x.id)}" title="${esc(x.id)}">${esc(x.title)} <small>${esc(x.range.start)} to ${esc(x.range.end)}</small></span>`).join('');
   }
 
+  /* Reconciliation: where each group's P&L comes from, by leg book and by logic. */
+  function recon(M) {
+    const LB = { SOLD: 'Sold leg', PARALLEL: 'Parallel book', STRANGLE: 'Strangle leg', HEDGE: 'Hedge', MAIN: 'Main' };
+    const name = g => (M.groups.length && g) ? g.charAt(0) + g.slice(1).toLowerCase().replace('nondirectional', '-directional') : g;
+    const acc = (keyFn) => { const m = {}; M.priced.forEach(p => { const a = p.atom, k = keyFn(a); const r = m[k] || (m[k] = { k, g: a.g, rows: 0, ids: new Set(), wins: 0, net: 0, gross: 0, costs: 0 }); r.rows++; r.ids.add(a.id); r.net += p.net; r.gross += p.gross; r.costs += p.costs; }); return Object.values(m); };
+    const byLeg = acc(a => a.g + '|' + a.s + '|' + a.leg).sort((a, b) => (a.k < b.k ? -1 : 1));
+    const byLogic = acc(a => a.g + '|' + String(a.id).split('|')[1]).sort((a, b) => (a.k < b.k ? -1 : 1));
+    // win rate per logic at position level
+    const pos = {}; M.priced.forEach(p => { const a = p.atom; pos[a.id] = (pos[a.id] || 0) + p.net; });
+    byLogic.forEach(r => { let w = 0; r.ids.forEach(id => { if (pos[id] > 0) w++; }); r.wins = w; });
+    const gname = g => g === 'NONDIRECTIONAL' ? 'Non-directional' : g === 'DIRECTIONAL' ? 'Directional' : g;
+    const t1 = '<table class="t"><tr><th>Group</th><th>Leg book</th><th>Rows</th><th>Gross</th><th>Costs</th><th>Net P&amp;L</th></tr>' + byLeg.map(r => { const lg = r.k.split('|'); return `<tr><td>${gname(lg[0])}</td><td>${LB[lg[1]] || lg[1]}${lg[2] && lg[2] !== 'BOTH' ? ' (' + lg[2] + ')' : ''}</td><td>${r.rows}</td><td>${inr(r.gross)}</td><td>${inr(r.costs)}</td><td class="${cls(r.net)}">${inr(r.net)}</td></tr>`; }).join('') + '</table>';
+    const t2 = '<table class="t"><tr><th>Group</th><th>Logic</th><th>Trades</th><th>Win rate</th><th>Net P&amp;L (all legs)</th></tr>' + byLogic.map(r => { const g = r.k.split('|')[0], lab = esc(r.k.split('|')[1]); return `<tr><td>${gname(g)}</td><td>${lab}</td><td>${r.ids.size}</td><td>${(r.wins / r.ids.size * 100).toFixed(1)}%</td><td class="${cls(r.net)}">${inr(r.net)}</td></tr>`; }).join('') + '</table>';
+    return `<h3>Where the P&amp;L comes from</h3><p class="sub">Each trade is a bundle of legs that are opened and closed together. A group's net P&amp;L is the sum of <b>all</b> its legs. A table showing only one leg book (for example the parallel book) will therefore not equal the group total.</p><div class="grid2"><div>${t1}</div><div>${t2}</div></div>`;
+  }
   async function renderBT() {
     if (!$('#b_reports')) buildBT(); if (IDX_ERR || !INDEX.length) return;
     for (const id of S.sel) { try { await loadReport(id); } catch (e) { $('#b_meta').innerHTML = `<span class="neg">${esc(e.message)}</span>`; } }
@@ -288,6 +303,7 @@
       const t = E.tradeStats(M.pos), tb = (rows, lab) => `<h3>${lab}</h3><table class="t"><tr><th>${lab.split(' ')[1] || ''}</th><th>Trades</th><th>Net</th><th>Win %</th></tr>` + rows.map(r => `<tr><td>${esc(r.key)}</td><td>${r.n}</td><td class="${cls(r.net)}">${inr(r.net)}</td><td>${(r.wins / r.n * 100).toFixed(0)}%</td></tr>`).join('') + '</table>';
       $('#b_ta').innerHTML = `<p class="sub">A trade = all legs sharing one id. Figures are net of the costs in the Cost Lab settings.</p><div class="kpis">${kpi('Trades', t.count)}${kpi('Win rate', t.winRate.toFixed(1) + '%')}${kpi('Average win', inr(t.avgWin), '', 'pos')}${kpi('Average loss', inr(t.avgLoss), '', 'neg')}${kpi('Expectancy / trade', inr(t.expectancy), '', cls(t.expectancy))}${kpi('Profit factor', t.profitFactor == null ? '-' : t.profitFactor.toFixed(2))}${kpi('Longest win / loss streak', t.maxWinStreak + ' / ' + t.maxLossStreak)}${kpi('Best / worst trade', inr(t.bestTrade) + ' / ' + inr(t.worstTrade))}</div>
        <div class="grid3"><div>${tb(t.byWeekday, 'By weekday')}</div><div>${tb(t.byDTE, 'By DTE (sessions to expiry)')}</div><div>${tb(t.byHour, 'By entry hour')}</div></div>
+       ${recon(M)}
        <p class="sub">DTE = trading sessions to expiry (expiry day 0, session before 1, and so on); weekends and holidays are not counted. Taken from the report as given.</p>`;
     } else $('#b_ta').innerHTML = '<p class="sub">Not available: this report has no trade legs.</p>';
     // cost lab
@@ -383,7 +399,7 @@
     if (ok) return; $('#gate').style.display = 'flex';
     $('#agree').onclick = () => { try { localStorage.setItem('ghs_agreed', '1'); } catch (e) { /* ignore */ } $('#gate').style.display = 'none'; };
   }
-  const BUILD = '2026-11-01.11';
+  const BUILD = '2026-11-01.12';
   function loadAbs(src) { return new Promise((res, rej) => { const t = document.createElement('script'); t.src = src + '?v=' + BUILD; t.onload = res; t.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(t); }); }
   const TGSVG = '<svg viewBox="0 0 24 24"><path d="M21.9 3.4 2.7 10.8c-1.3.5-1.3 1.3-.2 1.6l4.9 1.5 1.9 5.8c.2.6.1.9.8.9.5 0 .8-.2 1.1-.5l2.4-2.3 4.9 3.6c.9.5 1.5.2 1.7-.8l3-14.5c.3-1.2-.4-1.8-1.3-1.2zM8.6 13.2l9.6-6c.5-.3.9-.1.5.2l-8 7.2-.3 3.3z"/></svg>';
   let TGURL = '', SHARE = null;
