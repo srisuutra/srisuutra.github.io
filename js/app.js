@@ -379,8 +379,17 @@
     if (ok) return; $('#gate').style.display = 'flex';
     $('#agree').onclick = () => { try { localStorage.setItem('ghs_agreed', '1'); } catch (e) { /* ignore */ } $('#gate').style.display = 'none'; };
   }
+  const BUILD = '2026-11-01.5';
+  function loadAbs(src) { return new Promise((res, rej) => { const t = document.createElement('script'); t.src = src + '?v=' + BUILD; t.onload = res; t.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(t); }); }
+  /* Makes the page work even if an older index.html is still on the server. */
+  async function ensureShell() {
+    const L = [['live', 'Daily PnL Report'], ['strategy', 'Strategy Analysis'], ['monthly', 'Monthly Performance'], ['combined', 'Combined'], ['compare', 'Compare'], ['drawdown', 'Drawdown Analytics'], ['trade', 'Trade Analytics'], ['combos', 'Combos'], ['cost', 'Cost Lab'], ['share', 'Share Codes'], ['about', 'Method & costs']];
+    $('#tabs').innerHTML = L.map(x => `<button data-t="${x[0]}">${x[1]}</button>`).join('') + '<a id="tg" class="tg" href="#" target="_blank" rel="noopener noreferrer" hidden>Join Telegram</a>';
+    if (!$('#p_share')) { const sec = document.createElement('section'); sec.id = 'p_share'; sec.hidden = true; $('#p_about').before(sec); }
+    if (!window.SLive) { try { await loadAbs('js/live.js'); } catch (e) { LIVE_ERR = e.message; } }
+  }
   async function boot() {
-    decode(); gate();
+    await ensureShell(); decode(); gate();
     document.addEventListener('click', e => { if (e.target.id === 'reopen') { e.preventDefault(); $('#gate').style.display = 'flex'; $('#agree').onclick = () => { $('#gate').style.display = 'none'; }; } });
     $('#foot').innerHTML = '© SRISUUTRA ALGO TRADING. Information and education only; not investment advice or an offer to buy or sell. Backtest results are simulated; live results are owner-entered and unaudited. Past performance does not guarantee future results. Options trading carries a high risk of loss. <a href="#" id="reopen">Read the full disclaimer</a>';
     try { INDEX = await getJSON(INDEX_URL); if (!Array.isArray(INDEX)) throw new Error('index.json must be a list'); } catch (e) { IDX_ERR = 'The report list could not be loaded (' + e.message + '). If you opened this file directly from disk, serve it over http (GitHub Pages does this automatically).'; }
@@ -392,6 +401,7 @@
     const tl = cfg.telegram || ((LIVE && LIVE.links || []).find(l => /telegram|t\.me/i.test(l.label + l.url)) || {}).url;
     if (tl && /^https?:\/\//i.test(tl)) { const a = $('#tg'); a.href = tl; a.hidden = false; }
     if (S.tab === 'live' && !LIVE && INDEX.length) S.tab = 'strategy';
+    $('#foot').insertAdjacentHTML('beforeend', `<div class="sub" style="margin-top:8px">Build ${BUILD} · reports found: ${INDEX.length} · live data: ${LIVE ? 'loaded (' + Object.keys(LIVE.days || {}).length + ' days)' : 'not found'}${DIAG ? ' · ' + esc(DIAG) : ''}</div>`);
     show(S.tab);
   }
   // Period selector for the live tab needs its own id; renderPeriods builds ids from the prefix ('l_seg').
