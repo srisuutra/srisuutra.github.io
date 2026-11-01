@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SRISUUTRA - Prepare backtest report for the website</title>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--ink:#1b2440;--mut:#6a7391;--line:#dfe3ee;--navy:#1c2a4a;--gold:#c9a43b}
+@media(prefers-color-scheme:dark){:root{--bg:#10162a;--card:#19213a;--ink:#e8ebf5;--mut:#9aa3c0;--line:#2c3656}}
+*{box-sizing:border-box}body{margin:auto;max-width:860px;background:var(--bg);color:var(--ink);font:14px/1.5 "Segoe UI",system-ui,sans-serif;padding:16px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px}
+h1{font-size:18px;margin:0 0 6px}button,input{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+button{cursor:pointer;background:var(--navy);color:#fff;border-color:var(--navy)}button.gold{background:var(--gold);border-color:var(--gold);color:var(--navy);font-weight:700}button:disabled{opacity:.4;cursor:not-allowed}
+.mut{color:var(--mut);font-size:12px}code{background:var(--bg);padding:1px 5px;border-radius:4px}#log div{margin:3px 0}.ok{color:#0a8f55}.bad{color:#d12c2c}
+</style></head><body>
+<div class="panel"><h1>Prepare a backtest report for the website</h1>
+<p class="mut">Takes the report file from the backtest tool and makes the <b>public copy</b>: strategy and logic names are replaced by neutral labels (ND, D1, D2...), so they are not readable in your public GitHub repository. Numbers are not changed. Everything runs in this page; nothing is uploaded.</p></div>
+<div class="panel"><p><b>Step 1.</b> Choose the report file from the backtest tool (the big .json file).</p><input type="file" id="f1" accept=".json">
+<p><b>Step 2 (optional).</b> Choose the current <code>reports/index.json</code> from your repo, so older reports stay listed. Skip this to start a fresh list.</p><input type="file" id="f2" accept=".json">
+<p><button id="go" disabled>Prepare files</button></p><div id="log"></div>
+<p id="dl" hidden><button class="gold" id="d1"></button> <button class="gold" id="d2">Download index.json</button></p></div>
+<script>
+const $=id=>document.getElementById(id);let RAW=null,OLD=[];
+const log=(m,c)=>{const d=document.createElement('div');d.className=c||'';d.textContent=m;$('log').appendChild(d)};
+$('f1').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{RAW=r.result;$('go').disabled=false;$('log').innerHTML='';log('Loaded '+f.name+' ('+(f.size/1e6).toFixed(1)+' MB).')};r.readAsText(f)};
+$('f2').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{OLD=JSON.parse(r.result);if(!Array.isArray(OLD))throw 0;log('Existing index.json has '+OLD.length+' report(s).')}catch(x){OLD=[];log('That is not an index.json list.','bad')}};r.readAsText(f)};
+function save(name,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=name;a.click()}
+$('go').onclick=()=>{try{
+ const o=JSON.parse(RAW);if(o.format!=='ganithayyantra-report')throw new Error('This is not a backtest report file (format is not ganithayyantra-report).');
+ // neutral labels for the middle token of each trade id: NONDIRECTIONAL -> ND, DIRECTIONAL -> D1, D2 ...
+ const map={};let n=0;(o.trades||[]).forEach(t=>{const p=String(t.id).split('|');if(p.length<3)return;const tok=p[1];if(map[tok])return;map[tok]=t.g==='NONDIRECTIONAL'?'ND':'D'+(++n)});
+ let text=RAW;Object.keys(map).sort((a,b)=>b.length-a.length).forEach(k=>{text=text.split(k).join(map[k])});
+ const p=JSON.parse(text);(p.strategies||[]).forEach(s=>{s.note=s.name||''});
+ const id=p.id||('report_'+Date.now()),out=JSON.stringify(p),leaks=Object.keys(map).filter(k=>out.includes(k));
+ log('Replaced '+Object.keys(map).length+' internal names with neutral labels.','ok');if(leaks.length)log('Warning: some names are still present: '+leaks.join(', '),'bad');
+ const net=(p.summary&&p.summary.totals&&p.summary.totals.net),roi=p.summary&&p.summary.roi_pct;
+ const entry={id,title:p.title,kind:'backtest',combined:!!p.combined,strategies:(p.strategies||[]).map(s=>s.id),range:p.range,file:'reports/'+id+'.json',net,roi_pct:roi,max_drawdown_pct:p.summary&&p.summary.max_drawdown_pct,generated_at:p.generated_at};
+ const idx=OLD.filter(x=>x.id!==id).concat([entry]).sort((a,b)=>String(b.range&&b.range.end).localeCompare(String(a.range&&a.range.end)));
+ window._r=out;window._i=JSON.stringify(idx,null,1)+'\n';
+ $('d1').textContent='Download '+id+'.json';$('d1').onclick=()=>save(id+'.json',window._r);$('d2').onclick=()=>save('index.json',window._i);$('dl').hidden=false;
+ log('Ready. index.json will list '+idx.length+' report(s). Upload both files into the "reports" folder on GitHub.','ok');
+}catch(e){log('Problem: '+e.message,'bad')}};
+</script></body></html>

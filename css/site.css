@@ -99,11 +99,11 @@ button.sm.on{background:var(--navy);color:#fff}
 .lab1 label{display:block;font-size:11px;letter-spacing:.4px;color:var(--mut);margin-bottom:2px}
 .lab1 output{color:var(--ink);font-weight:700}
 .lab1 button{font-size:11px;padding:1px 7px;margin-top:2px}
-.brand img{width:92px;height:92px}
-.brand h1{font-size:30px;letter-spacing:2px}
-.brand small{font-size:13px;letter-spacing:5px}
+.brand img{width:112px;height:112px}
+.brand h1{font-size:36px;letter-spacing:2px}
+.brand small{font-size:15px;letter-spacing:6px}
 .brand{padding:12px 0}
-@media(max-width:620px){.brand img{width:64px;height:64px}.brand h1{font-size:22px}}
+@media(max-width:620px){.brand img{width:72px;height:72px}.brand h1{font-size:24px}.brand small{font-size:11px;letter-spacing:4px}}
 .scroll{max-height:560px;overflow:auto}
 
 .calwrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px}
