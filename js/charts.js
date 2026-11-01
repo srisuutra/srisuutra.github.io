@@ -60,26 +60,27 @@
     box.classList.add('chart'); box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.title || 'bar chart')}">${g}</svg>`;
   }
 
-  /* P&L calendar: weeks as rows (Mon-Fri). dates/nets parallel arrays. */
+  /* P&L calendar: one small Mon-Fri grid per month, months laid out side by side. dates/nets parallel arrays. */
   function calendar(box, dates, nets, capital) {
     if (!dates.length) { box.innerHTML = '<p class="sub">No data yet.</p>'; return; }
     const mx = Math.max(...nets.map(Math.abs), 1), months = {};
     dates.forEach((d, i) => { const m = d.slice(0, 7); (months[m] = months[m] || []).push([d, nets[i]]); });
-    let h = '';
+    let h = '<div class="calwrap">';
     Object.keys(months).forEach(m => {
-      h += `<h3>${new Date(m + '-01T00:00:00Z').toLocaleString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</h3><div class="cal">` + ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(x => `<div class="h">${x}</div>`).join('');
+      const tot = months[m].reduce((t, x) => t + x[1], 0);
+      h += `<div class="calm"><div class="calh"><b>${new Date(m + '-01T00:00:00Z').toLocaleString('en-IN', { month: 'short', year: 'numeric', timeZone: 'UTC' })}</b><span class="${cls(tot)}">${inr(tot)}</span></div><div class="cal">` + ['M', 'T', 'W', 'T', 'F'].map(x => `<div class="h">${x}</div>`).join('');
       const first = new Date(months[m][0][0] + 'T00:00:00Z').getUTCDay(); let col = (first + 6) % 7; if (col > 4) col = 0;
-      for (let i = 0; i < col; i++) h += '<div></div>';
+      for (let i = 0; i < col; i++) h += '<div class="e"></div>';
       let wk = col;
       months[m].forEach(([d, v]) => {
         const dow = (new Date(d + 'T00:00:00Z').getUTCDay() + 6) % 7; if (dow > 4) return;
-        while (wk % 5 !== dow) { h += '<div></div>'; wk++; }
-        const a = Math.min(0.85, 0.12 + Math.abs(v) / mx * 0.7), bg = v >= 0 ? `rgba(10,143,85,${a})` : `rgba(209,44,44,${a})`;
-        h += `<div style="background:${bg}" title="${d}: ${inr(v)}${capital ? ' (' + pc(v / capital * 100) + ')' : ''}"><b>${+d.slice(8)}</b><small>${inr(v)}</small></div>`; wk++;
+        while (wk % 5 !== dow) { h += '<div class="e"></div>'; wk++; }
+        const a = Math.min(0.85, 0.12 + Math.abs(v) / mx * 0.7), bg = Math.abs(v) < 0.5 ? 'var(--inp)' : v > 0 ? `rgba(10,143,85,${a})` : `rgba(209,44,44,${a})`;
+        h += `<div style="background:${bg}" title="${d}: ${inr(v)}${capital ? ' (' + pc(v / capital * 100) + ')' : ''}"><b>${+d.slice(8)}</b><small>${Math.abs(v) < 0.5 ? '-' : inr(v)}</small></div>`; wk++;
       });
-      h += '</div>';
+      h += '</div></div>';
     });
-    box.innerHTML = h;
+    box.innerHTML = h + '</div>';
   }
 
   /* simple horizontal comparison bars: items [{l,v}] */

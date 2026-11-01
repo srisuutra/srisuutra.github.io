@@ -206,11 +206,8 @@
 
   /* ================= SHARE CODES ================= */
   function renderShare() {
-    sync(); const codes = (LIVE && LIVE.strat || []).filter(x => x.code);
-    $('#p_share').innerHTML = `<div class="card"><h2>Share this view</h2><p class="sub">The code holds your selections: tab, reports, groups, capital and cost settings. Anyone who opens the link or pastes the code sees the same numbers.</p>
-      <div class="row"><input id="sh_cur" readonly style="flex:1;min-width:240px" value="${esc(location.href)}"><button class="pri" data-share>Copy share link</button></div></div>
-     <div class="card"><h2>Paste a share code or link</h2><div class="row"><input id="sh_in" placeholder="Paste a share code or a full link" style="flex:1;min-width:240px"><button class="gold" id="sh_go">Load</button></div><p class="sub" id="sh_msg"></p></div>
-     ${codes.length ? `<div class="card"><h2>Strategy share codes</h2><div class="scroll"><table class="t"><tr><th>Strategy</th><th>Share code</th></tr>${codes.map(x => `<tr><td>${esc(x.name)}</td><td><span class="fp">${esc(x.code)}</span> <button class="sm" data-copycode="${esc(x.code)}">Copy</button></td></tr>`).join('')}</table></div></div>` : '<div class="card"><h2>Strategy share codes</h2><p class="sub">No strategy share codes have been published yet. They appear here once added in the daily tool (Strategies table, Share code column) and exported.</p></div>'}`;
+    const codes = (LIVE && LIVE.strat || []).filter(x => x.code);
+    $('#p_share').innerHTML = `<div class="card"><h2>Strategy share codes</h2><p class="sub">Copy a code to use it on your platform. Past performance does not guarantee future results.</p>${codes.length ? `<div class="scroll"><table class="t"><tr><th>Strategy</th><th>Exchange</th><th>Share code</th></tr>${codes.map(x => `<tr><td>${esc(x.name)}</td><td>${esc(x.ex || '-')}</td><td><span class="fp">${esc(x.code)}</span> <button class="sm" data-copycode="${esc(x.code)}">Copy</button></td></tr>`).join('')}</table></div>` : '<p>No share codes have been published yet.</p>'}</div>`;
   }
   function loadCode(txt) {
     txt = String(txt || '').trim(); if (!txt) return false;
@@ -240,7 +237,7 @@
     <div class="kpis" id="b_kpis" data-sec="strategy"></div>
     <div class="card" id="b_combined" data-sec="strategy"></div>
     <div class="grid2" data-sec="strategy">${chart('b_eq', 'Equity curve (cumulative P&L)', 'bt')}${chart('b_dd', 'Drawdown (% of capital)', 'bt')}</div>
-    <div class="grid2" data-sec="strategy">${chart('b_mon', 'Monthly net P&L', 'bt')}<div class="card"><h2>P&amp;L calendar, last 12 months ${badge('bt')}</h2><div id="b_cal"></div></div></div>
+    <div data-sec="strategy">${chart('b_mon', 'Monthly net P&L', 'bt')}<div class="card"><h2>P&amp;L calendar, last 12 months ${badge('bt')}</h2><div id="b_cal"></div></div></div>
     <div data-sec="strategy">${periodsHTML('b_', 'bt')}</div>
     <div class="card" data-sec="strategy"><h2>Drawdown analytics ${badge('bt')}</h2><div id="b_dda"></div></div>
     <div class="card" id="b_cmp_card" data-sec="strategy"><h2>Compare groups ${badge('bt')}</h2><div id="b_cmp"></div></div>
@@ -270,14 +267,15 @@
     C.line($('#b_eq'), { series: [{ name: gross ? 'Gross' : 'Net', color: (eqVals.length ? eqVals[eqVals.length - 1] : 0) >= 0 ? C.POS : C.NEG, vals: eqVals }], labels: m.dates, fmt: v => inr(v), title: 'Equity curve' });
     C.line($('#b_dd'), { series: [{ name: 'Drawdown', color: C.GOLD, vals: m.dd.ddPct.map(v => -v) }], labels: m.dates, fmt: v => v.toFixed(2) + '%', title: 'Drawdown' });
     C.bars($('#b_mon'), { labels: m.monthly.map(r => mlabel(r.key)), vals: m.monthly.map(r => r.net), fmt: v => inr(v), title: 'Monthly net' });
-    { const n0 = Math.max(0, m.dates.length - 252); C.calendar($('#b_cal'), m.dates.slice(n0), m.nets.slice(n0), M.cap); }
+    { const lm = m.dates.length ? m.dates[m.dates.length - 1] : '', y = +lm.slice(0, 4), mo = +lm.slice(5, 7) - 11, cut = new Date(Date.UTC(y, mo - 1, 1)).toISOString().slice(0, 10), n0 = Math.max(0, m.dates.findIndex(d => d >= cut)); C.calendar($('#b_cal'), m.dates.slice(n0), m.nets.slice(n0), M.cap); }
     renderPeriods('b_', m, S.per, S.pf, S.pt, M.cap);
     $('#b_dda').innerHTML = ddAnalyticsHTML(m.dd);
     // compare groups
     if (M.groups.length > 1 && M.hasT) {
       const sess = M.days.map(d => d.date), per = M.groups.map(g => { const pr = M.priced.filter(p => p.g === g), d = E.dailyFromPriced(sess, pr), c = E.deployed([g], M.extra) * M.k, mm = E.metrics(d, c); return { g, d, mm, c }; });
-      let h = `<div class="scroll"><table class="t"><tr><th>Group</th><th>Net P&amp;L</th><th>ROI (own capital)</th><th>Max drawdown</th><th>Win days</th><th>Losing days</th></tr>` +
-        per.map(p => `<tr><td>${esc(gname(p.g))}</td><td class="${cls(p.mm.total)}">${inr(p.mm.total)}</td><td class="${cls(p.mm.roi)}">${pc(p.mm.roi)} <small>on ${inr(p.c)}</small></td><td class="neg">${pc(-p.mm.dd.maxPct)}</td><td>${p.mm.winPct.toFixed(1)}%</td><td>${p.d.filter(x => x.net < 0).length}</td></tr>`).join('') + '</table></div>';
+      let h = `<div class="scroll"><table class="t"><tr><th>Group</th><th>Net P&amp;L</th><th>ROI (own capital)</th><th>Max drawdown</th><th>Traded days</th><th>Winning days</th><th>Losing days</th></tr>` +
+        per.map(p => { const td = p.d.filter(x => x.trades > 0).length, w = p.d.filter(x => x.net > 0).length, l = p.d.filter(x => x.net < 0).length; return `<tr><td>${esc(gname(p.g))}</td><td class="${cls(p.mm.total)}">${inr(p.mm.total)}</td><td class="${cls(p.mm.roi)}">${pc(p.mm.roi)} <small>on ${inr(p.c)}</small></td><td class="neg">${pc(-p.mm.dd.maxPct)} <small>${inr(-p.mm.dd.max)}</small></td><td>${td}</td><td>${w} <small>(${td ? (w / td * 100).toFixed(1) : 0}%)</small></td><td>${l} <small>(${td ? (l / td * 100).toFixed(1) : 0}%)</small></td></tr>`; }).join('') + '</table></div>';
+      if (per.some(p => p.mm.dd.maxPct > 100)) h += '<div class="note">A drawdown above 100% means that group, on its own, lost more than the capital allotted to it from its best point. Groups are meant to run together: the portfolio drawdown (shown above) is measured on the combined capital.</div>';
       if (per.length === 2) { const a = per[0], b = per[1], la = a.d.map(x => x.net < 0), lb = b.d.map(x => x.net < 0), both = la.filter((v, i) => v && lb[i]).length, na = la.filter(Boolean).length, nb = lb.filter(Boolean).length;
         h += `<div class="note">${esc(gname(a.g))} lost on <b>${na}</b> days, ${esc(gname(b.g))} on <b>${nb}</b>. Both lost on the same day <b>${both}</b> times${na ? ` (${(both / na * 100).toFixed(0)}% of ${esc(gname(a.g))}'s losing days, ${nb ? (both / nb * 100).toFixed(0) : 0}% of ${esc(gname(b.g))}'s)` : ''}.</div>`; }
       h += `<p class="sub">Combined capital is ${inr(M.dep)} (margin offset), not the sum of the two.</p>`; $('#b_cmp').innerHTML = h; $('#b_cmp_card').hidden = false;
@@ -286,7 +284,7 @@
     if (M.hasT) {
       const t = E.tradeStats(M.pos), tb = (rows, lab) => `<h3>${lab}</h3><table class="t"><tr><th>${lab.split(' ')[1] || ''}</th><th>Trades</th><th>Net</th><th>Win %</th></tr>` + rows.map(r => `<tr><td>${esc(r.key)}</td><td>${r.n}</td><td class="${cls(r.net)}">${inr(r.net)}</td><td>${(r.wins / r.n * 100).toFixed(0)}%</td></tr>`).join('') + '</table>';
       $('#b_ta').innerHTML = `<p class="sub">A trade = all legs sharing one id. Figures are net of the costs in the Cost Lab settings.</p><div class="kpis">${kpi('Trades', t.count)}${kpi('Win rate', t.winRate.toFixed(1) + '%')}${kpi('Average win', inr(t.avgWin), '', 'pos')}${kpi('Average loss', inr(t.avgLoss), '', 'neg')}${kpi('Expectancy / trade', inr(t.expectancy), '', cls(t.expectancy))}${kpi('Profit factor', t.profitFactor == null ? '-' : t.profitFactor.toFixed(2))}${kpi('Longest win / loss streak', t.maxWinStreak + ' / ' + t.maxLossStreak)}${kpi('Best / worst trade', inr(t.bestTrade) + ' / ' + inr(t.worstTrade))}</div>
-       <div class="grid3"><div>${tb(t.byWeekday, 'By weekday')}</div><div>${tb(t.byDTE, 'By DTE (sessions to expiry)')}</div><div>${tb(t.byHour, 'By entry hour')}</div></div><div style="margin-top:10px">${tb(t.byWhy, 'By exit reason')}</div>
+       <div class="grid3"><div>${tb(t.byWeekday, 'By weekday')}</div><div>${tb(t.byDTE, 'By DTE (sessions to expiry)')}</div><div>${tb(t.byHour, 'By entry hour')}</div></div>
        <p class="sub">DTE = trading sessions to expiry (expiry day 0, session before 1, and so on); weekends and holidays are not counted. Taken from the report as given.</p>`;
     } else $('#b_ta').innerHTML = '<p class="sub">Not available: this report has no trade legs.</p>';
     // cost lab
@@ -332,7 +330,6 @@
      <tr><td>Exchange charge (both sides)</td><td style="white-space:normal;text-align:left">0.053% → 0.05% (1 Apr 2023) → 0.0495% (1 Apr 2024) → 0.03503% (1 Oct 2024)</td></tr>
      <tr><td>Stamp duty (buy side)</td><td>0.003%</td></tr><tr><td>SEBI fee</td><td>₹10 per crore of turnover</td></tr><tr><td>IPFT</td><td>₹0.01 per crore of turnover</td></tr>
      <tr><td>GST</td><td>18% on (brokerage + exchange + SEBI + IPFT)</td></tr><tr><td>Brokerage</td><td>₹20 per order</td></tr><tr><td>Slippage</td><td>0.02% (modelled; the backtest applies its own tick rounding)</td></tr></table></div></div>
-    <div class="card"><h2>Loaded reports</h2>${rs.length ? rs.map(r => `<p><b>${esc(r.title)}</b> (${esc(r.id)})<br>Range ${fdate(r.range.start)} to ${fdate(r.range.end)} | generated ${esc(r.generated_at || '-')}<br>Fingerprints: <span class="fp">${esc(JSON.stringify((r.provenance || {}).fingerprints || {}))}</span><br><small>${esc(r.disclaimer || '')}</small></p>`).join('') : '<p class="sub">Open the Backtest tab and choose a report to list its provenance here.</p>'}</div>
     <div class="card"><h2>Important</h2><p>This website is for information only. It is not investment advice, research, or an offer or solicitation to buy or sell anything, and no strategy is offered for sale or subscription. Past performance, simulated or live, does not guarantee future results. Options trading carries a high risk of loss. Results shown may be unaudited and costs are modelled for backtests.</p></div>`;
   }
 
@@ -355,7 +352,6 @@
     if (t.dataset.csort) { CSORT = t.dataset.csort; return renderCombos(); }
     if (t.dataset.copen !== undefined) { const c = COMBOS[+t.dataset.copen]; S.sel = c.sub.slice(); S.groups = c.groups.slice(); S.cap = null; const bb = $('#b_body'); if (bb) bb.dataset.sig = ''; return show('strategy'); }
     if (t.dataset.copycode !== undefined) { try { navigator.clipboard.writeText(t.dataset.copycode); t.textContent = 'Copied'; setTimeout(() => t.textContent = 'Copy', 1500); } catch (x) { prompt('Copy this code', t.dataset.copycode); } return; }
-    if (t.id === 'sh_go') { const ok = loadCode($('#sh_in').value); if (!ok) { $('#sh_msg').innerHTML = '<span class="neg">That code could not be read. Paste the whole link or the code after <b>s=</b>.</span>'; return; } return show(S.tab === 'share' ? 'strategy' : S.tab); }
     if (t.dataset.rep) { const id = t.dataset.rep, i = S.sel.indexOf(id); if (i >= 0) S.sel.splice(i, 1); else S.sel.push(id); S.groups = null; S.cap = null; $('#b_body').dataset.sig = ''; return renderBT(); }
     if (t.dataset.grp) { const all = BT ? BT.avail : []; let g = S.groups ? S.groups.slice() : all.slice(); const i = g.indexOf(t.dataset.grp); if (i >= 0) g.splice(i, 1); else g.push(t.dataset.grp); S.groups = g; S.cap = null; return renderBT(); }
     if (t.dataset.lgrp) { const all = LM ? LM.ids : []; let g = S.lgroups ? S.lgroups.slice() : all.slice(); const i = g.indexOf(t.dataset.lgrp); if (i >= 0) g.splice(i, 1); else g.push(t.dataset.lgrp); S.lgroups = g; S.lcap = null; return renderLive(); }
@@ -384,12 +380,14 @@
     if (ok) return; $('#gate').style.display = 'flex';
     $('#agree').onclick = () => { try { localStorage.setItem('ghs_agreed', '1'); } catch (e) { /* ignore */ } $('#gate').style.display = 'none'; };
   }
-  const BUILD = '2026-11-01.9';
+  const BUILD = '2026-11-01.10';
   function loadAbs(src) { return new Promise((res, rej) => { const t = document.createElement('script'); t.src = src + '?v=' + BUILD; t.onload = res; t.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(t); }); }
+  const TGBTN = '<a id="tg" class="tgbtn" href="#" target="_blank" rel="noopener noreferrer" hidden><svg viewBox="0 0 24 24"><path d="M21.9 3.4 2.7 10.8c-1.3.5-1.3 1.3-.2 1.6l4.9 1.5 1.9 5.8c.2.6.1.9.8.9.5 0 .8-.2 1.1-.5l2.4-2.3 4.9 3.6c.9.5 1.5.2 1.7-.8l3-14.5c.3-1.2-.4-1.8-1.3-1.2zM8.6 13.2l9.6-6c.5-.3.9-.1.5.2l-8 7.2-.3 3.3z"/></svg>Join Telegram</a>';
   /* Makes the page work even if an older index.html is still on the server. */
   async function ensureShell() {
     const L = [['live', 'Daily PnL Report'], ['strategy', 'Backtest Analysis'], ['trade', 'Trade Analytics'], ['cost', 'Cost Lab'], ['share', 'Share Codes'], ['about', 'Method & costs']];
-    $('#tabs').innerHTML = L.map(x => `<button data-t="${x[0]}">${x[1]}</button>`).join('') + '<a id="tg" class="tg" href="#" target="_blank" rel="noopener noreferrer" hidden>Join Telegram</a>';
+    $('#tabs').innerHTML = L.map(x => `<button data-t="${x[0]}">${x[1]}</button>`).join('');
+    if (!$('#tg')) { const d = document.createElement('div'); d.className = 'wrap tgrow'; d.innerHTML = TGBTN; document.querySelector('main').before(d); }
     if (!$('#p_share')) { const sec = document.createElement('section'); sec.id = 'p_share'; sec.hidden = true; $('#p_about').before(sec); }
     if (!window.SLive) { try { await loadAbs('js/live.js'); } catch (e) { LIVE_ERR = e.message; } }
   }
@@ -406,6 +404,7 @@
     const tl = cfg.telegram || ((LIVE && LIVE.links || []).find(l => /telegram|t\.me/i.test(l.label + l.url)) || {}).url;
     if (tl && /^https?:\/\//i.test(tl)) { const a = $('#tg'); a.href = tl; a.hidden = false; }
     if (S.tab === 'live' && !LIVE && INDEX.length && !/[#&]s=/.test(location.hash)) S.tab = 'strategy';
+    if (!(LIVE && (LIVE.strat || []).some(x => x.code))) { const sb = document.querySelector('#tabs [data-t=share]'); if (sb) sb.remove(); if (S.tab === 'share') S.tab = 'live'; }
     $('#foot').insertAdjacentHTML('beforeend', `<div class="sub" style="margin-top:8px">Build ${BUILD} · reports found: ${INDEX.length} · live data: ${LIVE ? 'loaded (' + Object.keys(LIVE.days || {}).length + ' days)' : 'not found'}${DIAG ? ' · ' + esc(DIAG) : ''}</div>`);
     show(S.tab);
   }

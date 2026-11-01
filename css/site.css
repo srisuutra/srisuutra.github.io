@@ -105,3 +105,12 @@ button.sm.on{background:var(--navy);color:#fff}
 .brand{padding:12px 0}
 @media(max-width:620px){.brand img{width:64px;height:64px}.brand h1{font-size:22px}}
 .scroll{max-height:560px;overflow:auto}
+
+.calwrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px}
+.calh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;font-size:13px}
+.cal .e{background:none;min-height:34px}
+.cal{font-size:10px}.cal div b{font-size:11px}
+a.tgbtn{display:inline-flex;align-items:center;gap:8px;background:#e3f2fd;border:1px solid #90caf9;color:#1565c0;text-decoration:none;font-weight:600;padding:9px 18px;border-radius:12px}
+a.tgbtn[hidden]{display:none}a.tgbtn svg{width:18px;height:18px;fill:currentColor}
+@media(prefers-color-scheme:dark){a.tgbtn{background:#16324d;border-color:#2a5f8f;color:#8ec9ff}}
+.tgrow{padding-top:14px}
