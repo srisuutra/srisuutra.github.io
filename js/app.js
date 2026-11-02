@@ -15,7 +15,7 @@
   const REP = {}; let INDEX = [], LIVE = null, LIVE_ERR = '', IDX_ERR = '';
 
   /* ---------- state + share code ---------- */
-  const BT_TABS = ['strategy', 'trade'], LEGACY = ['cost', 'monthly', 'combined', 'compare', 'drawdown', 'combos', 'bt'], TABS = ['live', ...BT_TABS, 'share', 'about'];
+  const BT_TABS = ['strategy', 'trade'], LEGACY = ['cost', 'monthly', 'combined', 'compare', 'drawdown', 'combos', 'bt'], TABS = ['live', ...BT_TABS, 'share', 'about', 'disc'];
   const S = { tab: 'live', sel: [], groups: null, cap: null, mult: 1, cfg: E.defaultCfg(), view: 'net', per: 'monthly', pf: '', pt: '', lcap: null, lgroups: null, lper: 'monthly', lpf: '', lpt: '' };
   function decode() {
     try { const m = /[#&]s=([^&]+)/.exec(location.hash); if (!m) return false; const o = JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')))));
@@ -372,6 +372,26 @@
   }
 
   /* ================= ABOUT ================= */
+  function renderDisc() {
+    const li = a => '<ul>' + a.map(x => '<li>' + x + '</li>').join('') + '</ul>';
+    $('#p_disc').innerHTML = `<div class="card disc"><h2>Disclaimer</h2>
+      <p class="lead"><b>SRISUUTRA ALGO TRADING is not registered with the Securities and Exchange Board of India (SEBI)</b> as an Investment Adviser, Research Analyst, Portfolio Manager or in any other capacity. Nothing on this website is investment advice, research analysis or a recommendation to buy, sell or hold any security, derivative or other financial instrument.</p>
+      <h3>Information and education only</h3>
+      <p>All content on this website, including backtest reports, live results, charts, strategy names, share codes and links, is published for general information and education only. It does not take into account your objectives, financial situation or risk tolerance, and it is not an offer, invitation or solicitation to subscribe to any strategy or to trade.</p>
+      <h3>Risk of loss</h3>
+      ${li(['Trading in futures and options (derivatives) involves a high degree of risk and may not be suitable for everyone. You can lose some or all of the capital you deploy, and in some cases more than you invest.', 'Leverage, volatility, slippage, gaps, liquidity, technical failures, broker or platform outages and changes in exchange rules can all lead to results that differ materially from those shown here.', 'Past performance, whether simulated or live, is not indicative of and does not guarantee future results. No profit, return or drawdown limit is promised.'])}
+      <h3>Backtest results are hypothetical</h3>
+      <p>Backtests are simulated on historical data with modelled costs and fixed assumptions (including a standardised quantity). They are prepared with the benefit of hindsight, do not reflect actual trading, and cannot fully account for market impact, order rejections, partial fills or liquidity. Results change when quantity, costs, slippage or the test period change. Simulated results have inherent limitations and should not be relied upon as a prediction.</p>
+      <h3>Live results</h3>
+      <p>Live results are entered by the owner, are net of charges as reported by the broker, are unaudited, and can be verified on Tradetron. They cover a short period and may contain errors or omissions. Individual results will vary with the time of execution, capital, quantity, brokerage, slippage and platform settings.</p>
+      <h3>Third-party platforms and links</h3>
+      <p>Strategies are run on third-party platforms such as Tradetron, and links or share codes lead to those platforms. We do not control them and are not responsible for their availability, accuracy, terms or any loss arising from their use. Messages posted on our Telegram channel are for information only and are not trading calls.</p>
+      <h3>Your responsibility</h3>
+      <p>You are solely responsible for your own trading and investment decisions. Please do your own research, consider your financial position and risk appetite, and consult a SEBI-registered investment adviser before acting on any information. By using this website you agree that the owner, its associates and contributors shall not be liable for any direct or indirect loss, damage or claim arising from the use of, or reliance on, this website or its content.</p>
+      <h3>Accuracy and changes</h3>
+      <p>We try to keep the content accurate, but we give no warranty that it is complete, current or error-free. Content, strategies and the terms of this disclaimer may be changed or withdrawn at any time without notice. All trademarks and names belong to their respective owners.</p>
+      <p class="sub">Investments in securities markets are subject to market risks. Read all related documents carefully before investing.</p></div>`;
+  }
   function renderAbout() {
     const rs = Object.values(REP);
     $('#p_about').innerHTML = `
@@ -396,8 +416,8 @@
     if (LEGACY.includes(t)) t = 'strategy'; if (!TABS.includes(t)) t = 'live';
     S.tab = t; document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
     const page = t === 'live' ? 'live' : BT_TABS.includes(t) ? 'bt' : t;
-    ['live', 'bt', 'share', 'about'].forEach(x => { $('#p_' + x).hidden = x !== page; });
-    if (page === 'bt') { applyView(); renderBT(); } else if (page === 'live') renderLive(); else if (page === 'share') renderShare(); else renderAbout(); sync();
+    ['live', 'bt', 'share', 'about', 'disc'].forEach(x => { const e = $('#p_' + x); if (e) e.hidden = x !== page; });
+    if (page === 'bt') { applyView(); renderBT(); } else if (page === 'live') renderLive(); else if (page === 'share') renderShare(); else if (page === 'disc') renderDisc(); else renderAbout(); sync();
   }
   function exportCSV(prefix) {
     if (prefix === 'bt' && BT && !BT.empty) { const m = BT.m; C.download('srisuutra_backtest_daily.csv', C.csv([['date', 'gross', 'costs', 'net', 'cumulative_net', 'drawdown_pct_of_capital', 'label'], ...m.dates.map((d, i) => [d, BT.days[i].gross.toFixed(2), BT.days[i].costs.toFixed(2), BT.days[i].net.toFixed(2), m.dd.cum[i].toFixed(2), (-m.dd.ddPct[i]).toFixed(4), 'BACKTEST'])]));
@@ -447,8 +467,9 @@
   let TGURL = '', SHARE = null;
   /* Makes the page work even if an older index.html is still on the server. */
   async function ensureShell() {
-    const L = [['live', 'Daily PnL Report'], ['strategy', 'Backtest Analysis'], ['trade', 'Trade Analytics'], ['share', 'Strategies'], ['about', 'Method & costs']];
+    const L = [['live', 'Daily PnL Report'], ['strategy', 'Backtest Analysis'], ['trade', 'Trade Analytics'], ['share', 'Strategies'], ['about', 'Method & costs'], ['disc', 'Disclaimer']];
     $('#tabs').innerHTML = L.map(x => `<button data-t="${x[0]}">${x[1]}</button>`).join('');
+    if (!$('#p_disc')) { const sec = document.createElement('section'); sec.id = 'p_disc'; sec.hidden = true; $('#p_about').after(sec); }
     if (!$('#p_share')) { const sec = document.createElement('section'); sec.id = 'p_share'; sec.hidden = true; $('#p_about').before(sec); }
     if (!window.SLive) { try { await loadAbs('js/live.js'); } catch (e) { LIVE_ERR = e.message; } }
   }
