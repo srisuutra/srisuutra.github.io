@@ -11,8 +11,8 @@
 
   const CRORE = 1e7;
   // Standard deployed capital per group (handover section 2). Non-directional 5L, directional 2L; both together 5L (margin offset).
-  const DEPLOYED = { NONDIRECTIONAL: 500000, DIRECTIONAL: 200000 };
-  const BOTH = 500000;
+  const DEPLOYED = {};
+  const BOTH = 0;
   // Slider start positions (Parameters of the zip). STT/exchange open at costs.actual_weighted.
   const PARAM_DEFAULTS = {
     slippage_pct: 0.02, brokerage_per_order: 20, brokerage_pct: 0, stt_pct: null, exchange_pct: null,
@@ -20,12 +20,10 @@
   };
   const SETTING_KEYS = Object.keys(PARAM_DEFAULTS);
 
-  function deployed(groups, extra) {
-    const g = new Set(groups);
-    if (g.has('NONDIRECTIONAL') && g.has('DIRECTIONAL')) {
-      let t = BOTH; g.forEach(x => { if (x !== 'NONDIRECTIONAL' && x !== 'DIRECTIONAL') t += (extra && extra[x]) || 0; });
-      return t;
-    }
+  /* Capital comes from the report: per-strategy capital, and (when every strategy of one report is selected) the report's combined deployed capital (margin offset). */
+  function deployed(groups, extra, both) {
+    const g = [...new Set(groups)];
+    if (both && g.length > 1) return both;
     let t = 0; g.forEach(x => { t += DEPLOYED[x] || (extra && extra[x]) || 0; });
     return t;
   }

@@ -6,13 +6,15 @@
   'use strict';
   const E = window.GHE, C = window.GC, esc = C.esc, inr = C.inr, pc = C.pc, cls = C.cls;
   const LIVE_URLS = ['live/data.json', 'live/live.json', 'data.json'], INDEX_URL = 'reports/index.json';
-  const GROUP_NAME = { NONDIRECTIONAL: 'Non-directional', DIRECTIONAL: 'Directional' };
+  const GROUP_NAME = { NONDIRECTIONAL: 'Nifty Non Directional Intraday', DIRECTIONAL: 'Nifty Intraday Option Buying (Pyramid L1-L3)', OPTION_BUYING: 'Nifty Intraday Option Buying (Pyramid L1-L3)' };
   const gname = g => GROUP_NAME[g] || g;
+  /* The combined deployed capital of a report applies when all of its strategies are selected. */
+  function bothDep(reps, groups) { if (reps.length !== 1) return 0; const r = reps[0], ids = (r.strategies || []).map(s => s.id); return r.capital && r.capital.deployed && ids.length > 1 && ids.every(i => groups.includes(i)) && groups.length === ids.length ? r.capital.deployed : 0; }
   const $ = s => document.querySelector(s);
   const REP = {}; let INDEX = [], LIVE = null, LIVE_ERR = '', IDX_ERR = '';
 
   /* ---------- state + share code ---------- */
-  const BT_TABS = ['strategy', 'trade', 'cost'], LEGACY = ['monthly', 'combined', 'compare', 'drawdown', 'combos', 'bt'], TABS = ['live', ...BT_TABS, 'share', 'about'];
+  const BT_TABS = ['strategy', 'trade'], LEGACY = ['cost', 'monthly', 'combined', 'compare', 'drawdown', 'combos', 'bt'], TABS = ['live', ...BT_TABS, 'share', 'about'];
   const S = { tab: 'live', sel: [], groups: null, cap: null, cfg: E.defaultCfg(), view: 'net', per: 'monthly', pf: '', pt: '', lcap: null, lgroups: null, lper: 'monthly', lpf: '', lpt: '' };
   function decode() {
     try { const m = /[#&]s=([^&]+)/.exec(location.hash); if (!m) return false; const o = JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')))));
@@ -127,13 +129,13 @@
     const reps = S.sel.map(id => REP[id]).filter(Boolean); if (!reps.length) return null;
     const avail = [...new Set(reps.flatMap(r => r.strategies.map(s => s.id)))];
     const groups = avail.filter(g => !S.groups || S.groups.includes(g)); if (!groups.length) return { reps, avail, groups, empty: true };
-    const extra = {}; reps.forEach(r => r.strategies.forEach(s => { extra[s.id] = s.capital; }));
-    const dep = E.deployed(groups, extra), cap = Math.max(dep, S.cap || dep), k = E.sizeK(cap, dep);
+    const extra = {}; reps.forEach(r => r.strategies.forEach(s => { extra[s.id] = s.capital; })); const both = bothDep(reps, groups);
+    const dep = E.deployed(groups, extra, both), cap = Math.max(dep, S.cap || dep), k = E.sizeK(cap, dep);
     const comb = E.combineReports(reps, groups), hasT = comb.atoms.length > 0, notes = comb.notes.slice();
     let priced = [], days;
     if (hasT) { priced = E.repriceAtoms(comb.atoms, S.cfg, k); days = E.dailyFromPriced(comb.sessions, priced); }
     else { const m = {}; reps[0].daily.forEach(d => { m[d.date] = d; }); days = comb.sessions.map(d => ({ date: d, gross: m[d].gross * k, costs: m[d].costs * k, net: m[d].net * k, trades: m[d].trades }));
-      notes.push('This report was exported without trade legs: size scaling works, but the Cost Lab and trade analytics are unavailable.'); }
+      notes.push('This report was exported without trade legs: size scaling works, but trade analytics are unavailable.'); }
     const m = E.metrics(days, cap), basis = (reps[0].summary || {}).drawdown_basis || 'daily';
     const pos = hasT ? E.positions(priced) : [];
     if (basis === 'trade' && pos.length) { m.dd = E.drawdown(pos.map(p => p.x), pos.map(p => p.net), cap); }
@@ -154,6 +156,17 @@
     $('#b_reports').innerHTML = INDEX.map(x => `<span class="chip ${S.sel.includes(x.id) ? 'on' : ''}" data-rep="${esc(x.id)}" title="${esc(x.id)}">${esc(x.title)} <small>${esc(x.range.start)} to ${esc(x.range.end)}</small></span>`).join('');
   }
 
+  /* Live data: Bullish + Bearish are shown as one strategy (Nifty Intraday Option Buying). Rule can be changed in config.json: "liveMerge":[{"name":"...","match":"bullish|bearish"}] */
+  function mergeLive(L, rules) {
+    if (!L || !Array.isArray(L.strat)) return;
+    (rules && rules.length ? rules : [{ name: 'Nifty Intraday Option Buying (Pyramid L1-L3)', match: 'bullish|bearish' }]).forEach(rule => {
+      const re = new RegExp(rule.match, 'i'), mem = L.strat.filter(s => re.test(s.name || '')); if (mem.length < 2) return;
+      const id = 'merged_' + mem.map(m => m.id).join('_');
+      const merged = { id, name: rule.name, cap: mem.reduce((t, m) => t + (parseFloat(m.cap) || 0), 0), mult: 1, ex: mem[0].ex || '', code: '' };
+      Object.keys(L.days || {}).forEach(d => { const row = L.days[d]; let any = false, sum = 0; mem.forEach(m => { const v = row[m.id]; if (v !== '' && v != null) { any = true; sum += (parseFloat(v) || 0) * (m.mult || 1); } }); row[id] = any ? sum : ''; mem.forEach(m => { delete row[m.id]; }); });
+      const at = L.strat.indexOf(mem[0]); L.strat = L.strat.filter(s => !mem.includes(s)); L.strat.splice(at, 0, merged);
+    });
+  }
   /* Reconciliation: where each group's P&L comes from, by leg book and by logic. */
   function recon(M) {
     const LB = { SOLD: 'Sold leg', PARALLEL: 'Parallel book', STRANGLE: 'Strangle leg', HEDGE: 'Hedge', MAIN: 'Main' };
@@ -164,7 +177,6 @@
     // win rate per logic at position level
     const pos = {}; M.priced.forEach(p => { const a = p.atom; pos[a.id] = (pos[a.id] || 0) + p.net; });
     byLogic.forEach(r => { let w = 0; r.ids.forEach(id => { if (pos[id] > 0) w++; }); r.wins = w; });
-    const gname = g => g === 'NONDIRECTIONAL' ? 'Non-directional' : g === 'DIRECTIONAL' ? 'Directional' : g;
     const t1 = '<table class="t"><tr><th>Group</th><th>Leg book</th><th>Rows</th><th>Gross</th><th>Costs</th><th>Net P&amp;L</th></tr>' + byLeg.map(r => { const lg = r.k.split('|'); return `<tr><td>${gname(lg[0])}</td><td>${LB[lg[1]] || lg[1]}${lg[2] && lg[2] !== 'BOTH' ? ' (' + lg[2] + ')' : ''}</td><td>${r.rows}</td><td>${inr(r.gross)}</td><td>${inr(r.costs)}</td><td class="${cls(r.net)}">${inr(r.net)}</td></tr>`; }).join('') + '</table>';
     const t2 = '<table class="t"><tr><th>Group</th><th>Logic</th><th>Trades</th><th>Win rate</th><th>Net P&amp;L (all legs)</th></tr>' + byLogic.map(r => { const g = r.k.split('|')[0], lab = esc(r.k.split('|')[1]); return `<tr><td>${gname(g)}</td><td>${lab}</td><td>${r.ids.size}</td><td>${(r.wins / r.ids.size * 100).toFixed(1)}%</td><td class="${cls(r.net)}">${inr(r.net)}</td></tr>`; }).join('') + '</table>';
     return `<h3>Where the P&amp;L comes from</h3><p class="sub">Each trade is a bundle of legs that are opened and closed together. A group's net P&amp;L is the sum of <b>all</b> its legs. A table showing only one leg book (for example the parallel book) will therefore not equal the group total.</p><div class="grid2"><div>${t1}</div><div>${t2}</div></div>`;
@@ -190,8 +202,8 @@
   /* ---------- Combos: every report x group combination, ranked ---------- */
   let COMBOS = null, CSORT = 'rd';
   function comboModel(reps, groups) {
-    const extra = {}; reps.forEach(r => r.strategies.forEach(s => { extra[s.id] = s.capital; }));
-    const dep = E.deployed(groups, extra); if (!dep) return null;
+    const extra = {}; reps.forEach(r => r.strategies.forEach(s => { extra[s.id] = s.capital; })); const both = bothDep(reps, groups);
+    const dep = E.deployed(groups, extra, both); if (!dep) return null;
     const comb = E.combineReports(reps, groups); let days;
     if (comb.atoms.length) days = E.dailyFromPriced(comb.sessions, E.repriceAtoms(comb.atoms, E.defaultCfg(), 1));
     else if (reps.length === 1) days = reps[0].daily.filter(d => comb.sessions.includes(d.date)); else return null;
@@ -253,7 +265,7 @@
   function buildBTBody(M) {
     const slidersOn = M.hasT;
     $('#b_body').innerHTML = `
-    <div class="card" id="b_panel" data-sec="strategy cost"><h2>Cost Lab: capital and costs ${badge('bt')}</h2>
+    <div class="card" id="b_panel" data-sec="cost"><h2>Capital and costs ${badge('bt')}</h2>
      <p class="sub">Every slider opens at what the backtest actually charged (STT and exchange at their turnover-weighted average of the dated rates). A slider you have not moved keeps the backtest's own figure, line by line; move it and that line is re-priced on a linear model. <b>Every number, chart and table on this page updates as you move a slider.</b> Capital: size = whole multiples of the deployed capital (<b>${inr(M.dep)}</b>); ROI and drawdown are a % of the capital on the slider.</p>
      <div class="labcap"><b>Capital (₹)</b><input type="range" id="b_cap" min="${M.dep}" max="${M.dep * 5}" step="10000"><input type="number" id="b_capn" min="${M.dep}" step="10000"><span class="sub">Deployed ${inr(M.dep)} → trading <b id="b_k"></b></span><output id="b_capv" hidden></output></div>
      ${slidersOn ? '<div id="b_lab" class="labgrid"></div>' : '<div class="note warn">Cost sliders are not available: this report was exported without trade legs. Capital still works.</div>'}
@@ -298,7 +310,7 @@
     $('#b_dda').innerHTML = ddAnalyticsHTML(m.dd);
     // compare groups
     if (M.groups.length > 1 && M.hasT) {
-      const sess = M.days.map(d => d.date), per = M.groups.map(g => { const pr = M.priced.filter(p => p.g === g), d = E.dailyFromPriced(sess, pr), c = E.deployed([g], M.extra) * M.k, mm = E.metrics(d, c); return { g, d, mm, c }; });
+      const sess = M.days.map(d => d.date), per = M.groups.map(g => { const pr = M.priced.filter(p => p.g === g), d = E.dailyFromPriced(sess, pr), c = E.deployed([g], M.extra, 0) * M.k, mm = E.metrics(d, c); return { g, d, mm, c }; });
       let h = `<div class="scroll"><table class="t"><tr><th>Group</th><th>Net P&amp;L</th><th>ROI (own capital)</th><th>Max drawdown</th><th>Traded days</th><th>Winning days</th><th>Losing days</th></tr>` +
         per.map(p => { const td = p.d.filter(x => x.trades > 0).length, w = p.d.filter(x => x.net > 0).length, l = p.d.filter(x => x.net < 0).length; return `<tr><td>${esc(gname(p.g))}</td><td class="${cls(p.mm.total)}">${inr(p.mm.total)}</td><td class="${cls(p.mm.roi)}">${pc(p.mm.roi)} <small>on ${inr(p.c)}</small></td><td class="neg">${pc(-p.mm.dd.maxPct)} <small>${inr(-p.mm.dd.max)}</small></td><td>${td}</td><td>${w} <small>(${td ? (w / td * 100).toFixed(1) : 0}%)</small></td><td>${l} <small>(${td ? (l / td * 100).toFixed(1) : 0}%)</small></td></tr>`; }).join('') + '</table></div>';
       if (per.some(p => p.mm.dd.maxPct > 100)) h += '<div class="note">A drawdown above 100% means that group, on its own, lost more than the capital allotted to it from its best point. Groups are meant to run together: the portfolio drawdown (shown above) is measured on the combined capital.</div>';
@@ -309,7 +321,7 @@
     // trade analytics
     if (M.hasT) {
       const t = E.tradeStats(M.pos), tb = (rows, lab) => `<h3>${lab}</h3><table class="t"><tr><th>${lab.split(' ')[1] || ''}</th><th>Trades</th><th>Net</th><th>Win %</th></tr>` + rows.map(r => `<tr><td>${esc(r.key)}</td><td>${r.n}</td><td class="${cls(r.net)}">${inr(r.net)}</td><td>${(r.wins / r.n * 100).toFixed(0)}%</td></tr>`).join('') + '</table>';
-      $('#b_ta').innerHTML = `<p class="sub">A trade = all legs sharing one id. Figures are net of the costs in the Cost Lab settings.</p><div class="kpis">${kpi('Trades', t.count)}${kpi('Win rate', t.winRate.toFixed(1) + '%')}${kpi('Average win', inr(t.avgWin), '', 'pos')}${kpi('Average loss', inr(t.avgLoss), '', 'neg')}${kpi('Expectancy / trade', inr(t.expectancy), '', cls(t.expectancy))}${kpi('Profit factor', t.profitFactor == null ? '-' : t.profitFactor.toFixed(2))}${kpi('Longest win / loss streak', t.maxWinStreak + ' / ' + t.maxLossStreak)}${kpi('Best / worst trade', inr(t.bestTrade) + ' / ' + inr(t.worstTrade))}</div>
+      $('#b_ta').innerHTML = `<p class="sub">A trade = all legs sharing one id. Figures are net of the costs modelled in the backtest.</p><div class="kpis">${kpi('Trades', t.count)}${kpi('Win rate', t.winRate.toFixed(1) + '%')}${kpi('Average win', inr(t.avgWin), '', 'pos')}${kpi('Average loss', inr(t.avgLoss), '', 'neg')}${kpi('Expectancy / trade', inr(t.expectancy), '', cls(t.expectancy))}${kpi('Profit factor', t.profitFactor == null ? '-' : t.profitFactor.toFixed(2))}${kpi('Longest win / loss streak', t.maxWinStreak + ' / ' + t.maxLossStreak)}${kpi('Best / worst trade', inr(t.bestTrade) + ' / ' + inr(t.worstTrade))}</div>
        <div class="grid3"><div>${tb(t.byWeekday, 'By weekday')}</div><div>${tb(t.byDTE, 'By DTE (sessions to expiry)')}</div><div>${tb(t.byHour, 'By entry hour')}</div></div>
        <p class="sub">DTE = trading sessions to expiry (expiry day 0, session before 1, and so on); weekends and holidays are not counted. Taken from the report as given.</p>`;
     } else $('#b_ta').innerHTML = '<p class="sub">Not available: this report has no trade legs.</p>';
@@ -345,7 +357,6 @@
     $('#p_about').innerHTML = `
     <div class="card"><h2>How the numbers are made</h2><ul>
      <li><b>Backtest vs live.</b> Backtests are simulated on historical data. Live results are entered by hand by the owner, net of charges. They are always shown separately and never joined into one curve.</li>
-     <li><b>Size and capital.</b> Non-directional trades 195 units per leg; directional trades 65 units per leg, the same in every year. Deployed capital: non-directional ${inr(500000)}, directional ${inr(200000)}, both together ${inr(500000)} (margin offset), not ${inr(700000)}. Size = floor(capital ÷ deployed).</li>
      <li><b>ROI and drawdown</b> are a % of the capital on the slider. Idle capital between size steps dilutes ROI. Drawdown is the fall from the highest cumulative P&amp;L, measured daily for intraday strategies (per trade for positional).</li>
      <li><b>Combining reports</b> from different runs uses common dates only; costs are summed.</li>
      <li><b>DTE</b> = trading sessions to expiry: expiry day 0, the session before 1; weekends and holidays are not counted.</li>
@@ -412,7 +423,7 @@
   let TGURL = '', SHARE = null;
   /* Makes the page work even if an older index.html is still on the server. */
   async function ensureShell() {
-    const L = [['live', 'Daily PnL Report'], ['strategy', 'Backtest Analysis'], ['trade', 'Trade Analytics'], ['cost', 'Cost Lab'], ['share', 'Strategies'], ['about', 'Method & costs']];
+    const L = [['live', 'Daily PnL Report'], ['strategy', 'Backtest Analysis'], ['trade', 'Trade Analytics'], ['share', 'Strategies'], ['about', 'Method & costs']];
     $('#tabs').innerHTML = L.map(x => `<button data-t="${x[0]}">${x[1]}</button>`).join('');
     if (!$('#p_share')) { const sec = document.createElement('section'); sec.id = 'p_share'; sec.hidden = true; $('#p_about').before(sec); }
     if (!window.SLive) { try { await loadAbs('js/live.js'); } catch (e) { LIVE_ERR = e.message; } }
@@ -429,6 +440,7 @@
     let cfg = {}; try { cfg = await getJSON('config.json'); } catch (e) { /* optional */ }
     const tl = cfg.telegram || ((LIVE && LIVE.links || []).find(l => /telegram|t\.me/i.test(l.label + l.url)) || {}).url;
     if (tl && /^https?:\/\//i.test(tl)) TGURL = tl;
+    mergeLive(LIVE, cfg.liveMerge);
     try { SHARE = await getJSON('share-codes.json'); } catch (e) { SHARE = null; }
     topTg();
     if (S.tab === 'live' && !LIVE && INDEX.length && !/[#&]s=/.test(location.hash)) S.tab = 'strategy';

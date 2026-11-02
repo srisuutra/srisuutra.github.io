@@ -74,10 +74,7 @@
      ${pview()}
      <div class="card"><h2>Report <span class="badge lv">LIVE</span></h2><div class="scroll">${table}</div><p class="sub">${M.on ? 'ROI and drawdown of every column use the cumulative capital.' : 'ROI and drawdown of each strategy use its own capital.'} Drawdown = fall from the highest equity (capital + cumulative P/L), in % of that peak.</p></div>
      <div class="grid2"><div class="card"><h2>Cumulative return (%) <span class="badge lv">LIVE</span></h2><div id="lv_eq"></div></div><div class="card"><h2>Portfolio drawdown (%) <span class="badge lv">LIVE</span></h2><div id="lv_dd"></div></div></div>
-     <div class="card"><h2>Monthly net P&amp;L <span class="badge lv">LIVE</span></h2><div id="lv_mon"></div></div><div class="card"><h2>P&amp;L calendar <span class="badge lv">LIVE</span></h2><div id="lv_cal"></div></div>
-     <div class="card"><h2>Strategies</h2><div class="scroll"><table class="t"><tr><th>Name</th><th>Exchange</th><th>Capital</th><th>Multiplier</th><th>Share code</th></tr>${strat}</table></div></div>
-     ${notes.length ? `<div class="card"><h2>Notes</h2>${notes.map(n => `<div class="note">${esc(n)}</div>`).join('')}</div>` : ''}
-     ${links.length ? `<div class="card"><h2>Follow &amp; join</h2><div class="row">${links.map(l => `<a class="linkbtn" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)}</a>`).join('')}</div></div>` : ''}`;
+     <div class="card"><h2>Monthly net P&amp;L <span class="badge lv">LIVE</span></h2><div id="lv_mon"></div></div><div class="card"><h2>P&amp;L calendar <span class="badge lv">LIVE</span></h2><div id="lv_cal"></div></div>`;
     const cum = eq.map(v => v / (M.tc || 1) * 100);
     C.line(el.querySelector('#lv_eq'), { series: [{ name: 'Cumulative return', color: last >= 0 ? C.POS : C.NEG, vals: cum }], labels: M.dates, fmt: v => v.toFixed(2) + '%', title: 'Cumulative return' });
     C.line(el.querySelector('#lv_dd'), { series: [{ name: 'Drawdown', color: C.GOLD, vals: T.ser }], labels: M.dates, fmt: v => v.toFixed(2) + '%', title: 'Drawdown' });

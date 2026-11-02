@@ -65,4 +65,4 @@ See **Daily update** at the top of this file.
 ## One-click publishing
 The three pages in `local/` (daily_entry, strategies_editor, prepare_report) can publish straight to this repository through the GitHub API. Create a fine-grained token (only this repository, Contents: Read and write), paste it in the page's GitHub connection box once. It stays in that browser only. See docs/SRISUUTRA_Website_Update_Guide.pdf.
 
-The backtest is published as two strategies only: Nifty Non Directional Intraday and Nifty Intraday Option Buying (Pyramid L1-L3). Deployed capital: non-directional 5L, directional 2L, both together 5L.
+The backtest is published as two strategies only: Nifty Non Directional Intraday and Nifty Intraday Option Buying (Pyramid L1-L3). Capital is read from the report file.

@@ -1,21 +1,21 @@
 [
  {
   "id": "combined_2021-08-02_2026-09-22",
-  "title": "Non-directional + Directional",
+  "title": "Nifty Non Directional Intraday + Nifty Intraday Option Buying (Pyramid L1-L3)",
   "kind": "backtest",
   "combined": true,
   "strategies": [
    "NONDIRECTIONAL",
-   "DIRECTIONAL"
+   "OPTION_BUYING"
   ],
   "range": {
    "start": "2021-08-02",
    "end": "2026-09-22"
   },
   "file": "reports/combined_2021-08-02_2026-09-22.json",
-  "net": 1196242.4,
-  "roi_pct": 239.25,
-  "max_drawdown_pct": 10.65,
-  "generated_at": "2026-11-02T05:26:30Z"
+  "net": 468264.07,
+  "roi_pct": 234.13,
+  "max_drawdown_pct": 24.85,
+  "generated_at": "2026-11-02T07:46:41Z"
  }
 ]
