@@ -52,11 +52,17 @@ See **Daily update** at the top of this file.
 - If you add a Telegram link to the entry page's Links, it shows on the site.
 
 ## F. Share codes and Telegram
-- The **Share Codes** tab reads `share-codes.json` in the top folder of the repo. It lists your strategies; a blank code shows "Not published yet".
-- To add or change codes: open `local/share_codes_editor.html` (double-click), type the codes, add new strategies with **+ Add strategy**, click **Download share-codes.json**, then on GitHub use **Add file -> Upload files** to replace `share-codes.json` and commit. Or edit `share-codes.json` directly on GitHub with the pencil icon.
-- The **Join Telegram** button is on the Share Codes tab only. Its link is `config.json` -> `"telegram"`.
+- The **Strategies** tab reads `share-codes.json` in the top folder of the repo. It lists your strategies; a blank code shows "Not published yet".
+- To add or change codes: open `local/strategies_editor.html` (double-click), type the codes, add new strategies with **+ Add strategy**, click **Download share-codes.json**, then on GitHub use **Add file -> Upload files** to replace `share-codes.json` and commit. Or edit `share-codes.json` directly on GitHub with the pencil icon.
+- The **Join Telegram** button is on the Strategies tab only. Its link is `config.json` -> `"telegram"`.
 - Daily Telegram post: in the daily tool (`local/daily_entry.html`), section 5, enter the bot token and channel once, then click "Send summary picture to Telegram".
 
 
 ## Only the parallel book is published
 `local/prepare_report.html` keeps ONLY the parallel-book legs of the Directional group (sold, strangle/core and hedge legs are dropped) and recomputes daily P&L, totals and drawdown from what remains. Non-directional is published as is. Never upload a raw backtest report.
+
+
+## One-click publishing
+The three pages in `local/` (daily_entry, strategies_editor, prepare_report) can publish straight to this repository through the GitHub API. Create a fine-grained token (only this repository, Contents: Read and write), paste it in the page's GitHub connection box once. It stays in that browser only. See docs/SRISUUTRA_Website_Update_Guide.pdf.
+
+The backtest is published as two strategies only: Nifty Non Directional Intraday and Nifty Intraday Option Buying (Pyramid L1-L3). Deployed capital: non-directional 5L, directional 2L, both together 5L.

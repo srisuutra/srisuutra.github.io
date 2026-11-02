@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SRISUUTRA - Strategies editor</title>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--ink:#1b2440;--mut:#6a7391;--line:#dfe3ee;--navy:#1c2a4a;--gold:#c9a43b}
+@media(prefers-color-scheme:dark){:root{--bg:#10162a;--card:#19213a;--ink:#e8ebf5;--mut:#9aa3c0;--line:#2c3656}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,sans-serif;padding:16px;max-width:900px;margin:auto}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px}
+h1{font-size:18px;margin:0 0 6px}h2{font-size:15px;margin:0 0 8px}
+button,input{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+button{cursor:pointer;background:var(--navy);color:#fff;border-color:var(--navy)}button.g{background:var(--card);color:var(--ink)}button.gold{background:var(--gold);border-color:var(--gold);color:var(--navy);font-weight:700}button.x{background:none;border:none;color:#c0392b}
+table{border-collapse:collapse;width:100%}td,th{padding:4px;text-align:left}th{color:var(--mut);font-size:12px}td input{width:100%}
+.mut{color:var(--mut);font-size:12px}ol{margin:6px 0 0 18px;padding:0}
+</style></head><body>
+<div class="panel"><h1>SRISUUTRA - Strategies editor</h1><p class="mut">Edit the share codes shown on the website's <b>Strategies</b> tab. Type the strategy link and share code for each strategy, then press <b>Publish to GitHub</b>. Nothing is sent anywhere until you do.</p>
+<ol class="mut"><li>Type or paste each strategy's link and share code. Add or remove strategies as needed.</li><li>Click <b>Publish to GitHub</b> (after the one-time connection below). The site updates in about a minute.</li><li>No token? Click <b>Download share-codes.json</b> instead and upload it by hand:</li><li>On GitHub open the repository <code>srisuutra.github.io</code>, click <b>Add file → Upload files</b>, drop the file in the top level (it replaces the old one) and click <b>Commit changes</b>. The site updates in about a minute.</li></ol></div>
+<!--GHPUB-START-->
+<details class="ghpanel" id="ghp" style="background:var(--card,#fff);border:1px solid var(--line,#dfe3ee);border-radius:8px;padding:10px 14px;margin:0 0 14px"><summary style="cursor:pointer;font-weight:700">GitHub connection (set up once)</summary>
+<p style="font-size:12px;color:var(--mut,#6a7391);margin:8px 0">Lets this page publish straight to your website repository, so you do not have to upload files by hand. Create a token once: GitHub &rarr; your profile picture &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens &rarr; Fine-grained tokens &rarr; Generate new token. Repository access: <b>Only select repositories</b> &rarr; srisuutra.github.io. Permissions: <b>Contents = Read and write</b>. Paste the token below. It is kept only in this browser (never exported or sent anywhere except github.com).</p>
+<p style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0"><input id="gh_tok" type="password" placeholder="GitHub token (github_pat_...)" style="flex:2;min-width:220px"><input id="gh_repo" style="flex:1;min-width:180px" title="owner/repository"><input id="gh_br" style="width:80px" title="branch"><button type="button" onclick="GHPUB.saveUi()">Save</button><span id="gh_m" style="font-size:12px"></span></p></details>
+<script>
+const GHPUB={K:'srisuutra_gh_v1',get(){let c={repo:'srisuutra/srisuutra.github.io',branch:'main',token:''};try{Object.assign(c,JSON.parse(localStorage.getItem(this.K)||'{}'))}catch(e){}return c},
+ set(c){try{localStorage.setItem(this.K,JSON.stringify(c))}catch(e){}},
+ saveUi(){const c={token:document.getElementById('gh_tok').value.trim(),repo:document.getElementById('gh_repo').value.trim()||'srisuutra/srisuutra.github.io',branch:document.getElementById('gh_br').value.trim()||'main'};this.set(c);document.getElementById('gh_m').textContent='Saved in this browser.'},
+ initUi(){const c=this.get();document.getElementById('gh_tok').value=c.token;document.getElementById('gh_repo').value=c.repo;document.getElementById('gh_br').value=c.branch;if(!c.token)document.getElementById('ghp').open=true},
+ async put(path,text,msg){const c=this.get();if(!c.token)throw new Error('Open "GitHub connection", paste your token and press Save first.');
+  const api='https://api.github.com/repos/'+c.repo+'/contents/'+path.split('/').map(encodeURIComponent).join('/'),h={Authorization:'Bearer '+c.token,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};
+  let sha;const g=await fetch(api+'?ref='+encodeURIComponent(c.branch),{headers:h});
+  if(g.ok){sha=(await g.json()).sha}else if(g.status===401||g.status===403){throw new Error('GitHub refused the token ('+g.status+'). Check that it is not expired and has Contents: Read and write on '+c.repo+'.')}else if(g.status!==404){throw new Error('GitHub error '+g.status)}
+  const bytes=new TextEncoder().encode(text);let bin='';for(let i=0;i<bytes.length;i+=32768)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+32768));
+  const r=await fetch(api,{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},h),body:JSON.stringify({message:msg,content:btoa(bin),branch:c.branch,sha})});
+  if(!r.ok){let m='';try{m=(await r.json()).message}catch(e){}throw new Error('GitHub error '+r.status+(m?': '+m:''))}return true}};
+GHPUB.initUi();
+</script>
+<!--GHPUB-END-->
+
+<div class="panel"><table id="t"></table><p><button class="g" onclick="addRow()">+ Add strategy</button></p>
+<p><button class="gold" onclick="pub()">Publish to GitHub</button> <button class="g" onclick="dl()">Download share-codes.json</button> <button class="g" onclick="document.getElementById('f').click()">Load existing share-codes.json</button><input type="file" id="f" accept=".json" hidden> <span class="mut" id="m"></span></p></div>
+<script>
+const K='srisuutra_share_v2',$=id=>document.getElementById(id);
+let L;try{L=JSON.parse(localStorage.getItem(K))}catch(e){}
+if(!Array.isArray(L))L=[{name:'Nifty Non Directional Intraday',exchange:'NFO',link:'https://tradetron.tech/strategy/999050766',code:''},{name:'Nifty Intraday Option Buying (Pyramid L1-L3)',exchange:'NFO',link:'',code:''}];
+const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function save(){try{localStorage.setItem(K,JSON.stringify(L))}catch(e){}}
+function draw(){$('t').innerHTML='<tr><th>Strategy name</th><th style="width:90px">Exchange</th><th>Strategy link</th><th>Share code</th><th></th></tr>'+L.map((r,i)=>`<tr><td><input data-i="${i}" data-k="name" value="${esc(r.name)}"></td><td><input data-i="${i}" data-k="exchange" placeholder="NFO / MCX" value="${esc(r.exchange)}"></td><td><input data-i="${i}" data-k="link" placeholder="https://tradetron.tech/strategy/..." value="${esc(r.link)}"></td><td><input data-i="${i}" data-k="code" placeholder="leave blank until ready" value="${esc(r.code)}"></td><td><button class="x" onclick="del(${i})">✕</button></td></tr>`).join('')}
+function addRow(){L.push({name:'New strategy',exchange:'NFO',link:'',code:''});save();draw()}
+function del(i){if(confirm('Remove this strategy from the list?')){L.splice(i,1);save();draw()}}
+document.addEventListener('input',e=>{const t=e.target;if(t.dataset&&t.dataset.k){L[t.dataset.i][t.dataset.k]=t.value;save()}});
+function body(){return JSON.stringify({strategies:L.filter(r=>String(r.name).trim()).map(r=>({name:String(r.name).trim(),exchange:String(r.exchange).trim(),link:String(r.link||'').trim(),code:String(r.code).trim()}))},null,1)+'\n'}
+async function pub(){$('m').textContent='Publishing...';try{await GHPUB.put('share-codes.json',body(),'Update strategies, links and share codes');$('m').textContent='Published. The site updates in about a minute (press Ctrl+F5).'}catch(x){$('m').textContent='Not published: '+x.message}}
+function dl(){const o={strategies:L.filter(r=>String(r.name).trim()).map(r=>({name:String(r.name).trim(),exchange:String(r.exchange).trim(),link:String(r.link||'').trim(),code:String(r.code).trim()}))};
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(o,null,1)+'\n'],{type:'application/json'}));a.download='share-codes.json';a.click();$('m').textContent='Downloaded. Upload it to GitHub to publish.'}
+$('f').onchange=e=>{const fl=e.target.files[0];if(!fl)return;const r=new FileReader();r.onload=ev=>{try{const o=JSON.parse(ev.target.result);if(!Array.isArray(o.strategies))throw 0;L=o.strategies.map(x=>({name:x.name||'',exchange:x.exchange||'',link:x.link||'',code:x.code||''}));save();draw();$('m').textContent='Loaded.'}catch(x){$('m').textContent='Not a share-codes.json file.'}};r.readAsText(fl);e.target.value=''};
+draw();
+</script></body></html>

@@ -3,16 +3,13 @@
   {
    "name": "Nifty Non Directional Intraday",
    "exchange": "NFO",
+   "link": "https://tradetron.tech/strategy/999050766",
    "code": ""
   },
   {
-   "name": "Nifty Bullish Intraday (Pyramid L1-L3)",
+   "name": "Nifty Intraday Option Buying (Pyramid L1-L3)",
    "exchange": "NFO",
-   "code": ""
-  },
-  {
-   "name": "Nifty Bearish Intraday (Pyramid L1-L3)",
-   "exchange": "NFO",
+   "link": "",
    "code": ""
   }
  ]

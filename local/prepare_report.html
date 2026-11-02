@@ -11,11 +11,31 @@ button{cursor:pointer;background:var(--navy);color:#fff;border-color:var(--navy)
 .mut{color:var(--mut);font-size:12px}code{background:var(--bg);padding:1px 5px;border-radius:4px}#log div{margin:3px 0}.ok{color:#0a8f55}.bad{color:#d12c2c}
 </style></head><body>
 <div class="panel"><h1>Prepare a backtest report for the website</h1>
-<p class="mut">Takes the report file from the backtest tool and makes the <b>public copy</b>: strategy and logic names are replaced by neutral labels (ND, D1, D2...), so they are not readable in your public GitHub repository. Numbers are not changed. Everything runs in this page; nothing is uploaded.</p></div>
+<p class="mut">Takes the report file from the backtest tool and makes the <b>public copy</b>: strategy and logic names are replaced by neutral labels (ND, D1, D2...), so they are not readable in your public GitHub repository. Numbers are not changed. Keeps only the two published strategies (Non-directional; Directional = all other groups combined, parallel book only). Everything runs in this page; nothing leaves it unless you press <b>Publish to GitHub</b>.</p></div>
+<!--GHPUB-START-->
+<details class="ghpanel" id="ghp" style="background:var(--card,#fff);border:1px solid var(--line,#dfe3ee);border-radius:8px;padding:10px 14px;margin:0 0 14px"><summary style="cursor:pointer;font-weight:700">GitHub connection (set up once)</summary>
+<p style="font-size:12px;color:var(--mut,#6a7391);margin:8px 0">Lets this page publish straight to your website repository, so you do not have to upload files by hand. Create a token once: GitHub &rarr; your profile picture &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens &rarr; Fine-grained tokens &rarr; Generate new token. Repository access: <b>Only select repositories</b> &rarr; srisuutra.github.io. Permissions: <b>Contents = Read and write</b>. Paste the token below. It is kept only in this browser (never exported or sent anywhere except github.com).</p>
+<p style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0"><input id="gh_tok" type="password" placeholder="GitHub token (github_pat_...)" style="flex:2;min-width:220px"><input id="gh_repo" style="flex:1;min-width:180px" title="owner/repository"><input id="gh_br" style="width:80px" title="branch"><button type="button" onclick="GHPUB.saveUi()">Save</button><span id="gh_m" style="font-size:12px"></span></p></details>
+<script>
+const GHPUB={K:'srisuutra_gh_v1',get(){let c={repo:'srisuutra/srisuutra.github.io',branch:'main',token:''};try{Object.assign(c,JSON.parse(localStorage.getItem(this.K)||'{}'))}catch(e){}return c},
+ set(c){try{localStorage.setItem(this.K,JSON.stringify(c))}catch(e){}},
+ saveUi(){const c={token:document.getElementById('gh_tok').value.trim(),repo:document.getElementById('gh_repo').value.trim()||'srisuutra/srisuutra.github.io',branch:document.getElementById('gh_br').value.trim()||'main'};this.set(c);document.getElementById('gh_m').textContent='Saved in this browser.'},
+ initUi(){const c=this.get();document.getElementById('gh_tok').value=c.token;document.getElementById('gh_repo').value=c.repo;document.getElementById('gh_br').value=c.branch;if(!c.token)document.getElementById('ghp').open=true},
+ async put(path,text,msg){const c=this.get();if(!c.token)throw new Error('Open "GitHub connection", paste your token and press Save first.');
+  const api='https://api.github.com/repos/'+c.repo+'/contents/'+path.split('/').map(encodeURIComponent).join('/'),h={Authorization:'Bearer '+c.token,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};
+  let sha;const g=await fetch(api+'?ref='+encodeURIComponent(c.branch),{headers:h});
+  if(g.ok){sha=(await g.json()).sha}else if(g.status===401||g.status===403){throw new Error('GitHub refused the token ('+g.status+'). Check that it is not expired and has Contents: Read and write on '+c.repo+'.')}else if(g.status!==404){throw new Error('GitHub error '+g.status)}
+  const bytes=new TextEncoder().encode(text);let bin='';for(let i=0;i<bytes.length;i+=32768)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+32768));
+  const r=await fetch(api,{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},h),body:JSON.stringify({message:msg,content:btoa(bin),branch:c.branch,sha})});
+  if(!r.ok){let m='';try{m=(await r.json()).message}catch(e){}throw new Error('GitHub error '+r.status+(m?': '+m:''))}return true}};
+GHPUB.initUi();
+</script>
+<!--GHPUB-END-->
+
 <div class="panel"><p><b>Step 1.</b> Choose the report file from the backtest tool (the big .json file).</p><input type="file" id="f1" accept=".json">
 <p><b>Step 2 (optional).</b> Choose the current <code>reports/index.json</code> from your repo, so older reports stay listed. Skip this to start a fresh list.</p><input type="file" id="f2" accept=".json">
 <p><button id="go" disabled>Prepare files</button></p><div id="log"></div>
-<p id="dl" hidden><button class="gold" id="d1"></button> <button class="gold" id="d2">Download index.json</button></p></div>
+<p id="dl" hidden><button class="gold" id="pub" type="button">Publish to GitHub now</button> <button class="g" id="d1"></button> <button class="g" id="d2">Download index.json</button></p></div>
 <script>
 const $=id=>document.getElementById(id);let RAW=null,OLD=[];
 const log=(m,c)=>{const d=document.createElement('div');d.className=c||'';d.textContent=m;$('log').appendChild(d)};
@@ -24,10 +44,23 @@ $('f2').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileRead
 function save(name,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=name;a.click()}
 $('go').onclick=()=>{try{
  const o=JSON.parse(RAW);if(o.format!=='ganithayyantra-report')throw new Error('This is not a backtest report file (format is not ganithayyantra-report).');
- // neutral labels for the middle token of each trade id: NONDIRECTIONAL -> ND, DIRECTIONAL -> D1, D2 ...
- const map={};let n=0;(o.trades||[]).forEach(t=>{const p=String(t.id).split('|');if(p.length<3)return;const tok=p[1];if(map[tok])return;map[tok]=t.g==='NONDIRECTIONAL'?'ND':'D'+(++n)});
+ // 1) neutral labels for the middle token of each trade id (internal logic names -> D1, D2 ...). Group names are left alone.
+ const GROUPS=['NONDIRECTIONAL','DIRECTIONAL'],map={};let n=0;
+ (o.trades||[]).forEach(t=>{const p=String(t.id).split('|');if(p.length<3)return;const tok=p[1];if(map[tok]||GROUPS.includes(tok))return;map[tok]=t.g==='NONDIRECTIONAL'?'ND':'D'+(++n)});
  let text=RAW;Object.keys(map).sort((a,b)=>b.length-a.length).forEach(k=>{text=text.split(k).join(map[k])});
- const p=JSON.parse(text);(p.strategies||[]).forEach(s=>{s.note=s.name||''});
+ const p=JSON.parse(text);
+ // 2) only two strategies are published: Non-directional, and Directional (every other group merged into it)
+ const ST=p.strategies||[],nd=ST.find(s=>s.id==='NONDIRECTIONAL'),rest=ST.filter(s=>s.id!=='NONDIRECTIONAL');
+ (p.trades||[]).forEach(t=>{if(t.g!=='NONDIRECTIONAL')t.g='DIRECTIONAL'});
+ p.strategies=[];
+ if(nd)p.strategies.push({id:'NONDIRECTIONAL',name:'Non-directional',title:'Nifty Non Directional Intraday',note:'',capital:nd.capital,units_per_leg:nd.units_per_leg});
+ if(rest.length)p.strategies.push({id:'DIRECTIONAL',name:'Directional',title:'Nifty Intraday Option Buying (Pyramid L1-L3)',note:'',capital:rest.reduce((a,s)=>a+(s.capital||0),0),units_per_leg:rest[0].units_per_leg});
+ p.title='Non-directional + Directional';p.id=p.id.replace(/^combined_parallel_/,'combined_');
+ if(p.provenance&&p.provenance.fingerprints)p.provenance.fingerprints=Object.fromEntries(Object.entries(p.provenance.fingerprints).map(([k,v],i)=>['S'+(i+1),v]));
+ const id=p.id||('report_'+Date.now()),out0=JSON.stringify(p),leaks=Object.keys(map).filter(k=>out0.includes(k));
+ log('Replaced '+Object.keys(map).length+' internal names with neutral labels.','ok');if(leaks.length)log('Warning: some names are still present: '+leaks.join(', '),'bad');
+ // 3) exit reasons are reduced to broad categories (the exact rules and thresholds are not published)
+ (p.trades||[]).forEach(t=>{const w=String(t.why||'');t.why=/time exit/i.test(w)?'Time exit':/mtm/i.test(w)?'MTM drawdown exit':/hedge/i.test(w)?'Hedge exit':/stop/i.test(w)?'Stop-loss exit':/rapid|imbalance/i.test(w)?'Market-move exit':w?'Other exit':'n/a'});
  // publish ONLY the parallel book of the directional group (sold, strangle and hedge legs are dropped); non-directional is kept as is
  const before=(p.trades||[]).length;const keep=(p.trades||[]).filter(t=>t.g!=='DIRECTIONAL'||t.s==='PARALLEL');p.trades=keep;
  const r2=x=>Math.round(x*100)/100,dm=new Map();(p.daily||[]).forEach(d=>dm.set(d.date,{date:d.date,gross:0,costs:0,net:0,ids:new Set()}));
@@ -42,13 +75,12 @@ $('go').onclick=()=>{try{
  ['monthly','yearly','by_dte','sharpe','current_drawdown','current_drawdown_pct','breakeven_slippage_pct'].forEach(k=>delete sm[k]);
  p.legs=[...new Set(keep.map(t=>t.s))].sort();
  log('Kept the parallel book only for Directional: '+keep.length+' of '+before+' leg rows published; the other legs were dropped.','ok');
- const id=p.id||('report_'+Date.now()),out=JSON.stringify(p),leaks=Object.keys(map).filter(k=>out.includes(k));
- log('Replaced '+Object.keys(map).length+' internal names with neutral labels.','ok');if(leaks.length)log('Warning: some names are still present: '+leaks.join(', '),'bad');
+ const out=JSON.stringify(p);
  const net=(p.summary&&p.summary.totals&&p.summary.totals.net),roi=p.summary&&p.summary.roi_pct;
  const entry={id,title:p.title,kind:'backtest',combined:!!p.combined,strategies:(p.strategies||[]).map(s=>s.id),range:p.range,file:'reports/'+id+'.json',net,roi_pct:roi,max_drawdown_pct:p.summary&&p.summary.max_drawdown_pct,generated_at:p.generated_at};
  const idx=OLD.filter(x=>x.id!==id).concat([entry]).sort((a,b)=>String(b.range&&b.range.end).localeCompare(String(a.range&&a.range.end)));
  window._r=out;window._i=JSON.stringify(idx,null,1)+'\n';
- $('d1').textContent='Download '+id+'.json';$('d1').onclick=()=>save(id+'.json',window._r);$('d2').onclick=()=>save('index.json',window._i);$('dl').hidden=false;
+ $('d1').textContent='Download '+id+'.json';$('d1').onclick=()=>save(id+'.json',window._r);$('d2').onclick=()=>save('index.json',window._i);$('pub').onclick=async()=>{$('pub').disabled=true;try{log('Publishing...');await GHPUB.put('reports/'+id+'.json',window._r,'Update backtest report '+id);await GHPUB.put('reports/index.json',window._i,'Update reports index');log('Published to GitHub. The site updates in about a minute (press Ctrl+F5).','ok')}catch(e){log('Not published: '+e.message,'bad')}$('pub').disabled=false};$('dl').hidden=false;
  log('Ready. index.json will list '+idx.length+' report(s). Upload both files into the "reports" folder on GitHub.','ok');
 }catch(e){log('Problem: '+e.message,'bad')}};
 </script></body></html>

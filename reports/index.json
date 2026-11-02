@@ -12,10 +12,10 @@
    "start": "2021-08-02",
    "end": "2026-09-22"
   },
-  "file": "reports/combined_2021-08-02_2026-09-22/report.json",
+  "file": "reports/combined_2021-08-02_2026-09-22.json",
   "net": 1196242.4,
-  "roi_pct": 299.06,
-  "max_drawdown_pct": 13.32,
-  "generated_at": "2026-11-01T14:24:22Z"
+  "roi_pct": 239.25,
+  "max_drawdown_pct": 10.65,
+  "generated_at": "2026-11-02T05:26:30Z"
  }
 ]

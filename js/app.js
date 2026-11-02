@@ -169,11 +169,14 @@
     const t2 = '<table class="t"><tr><th>Group</th><th>Logic</th><th>Trades</th><th>Win rate</th><th>Net P&amp;L (all legs)</th></tr>' + byLogic.map(r => { const g = r.k.split('|')[0], lab = esc(r.k.split('|')[1]); return `<tr><td>${gname(g)}</td><td>${lab}</td><td>${r.ids.size}</td><td>${(r.wins / r.ids.size * 100).toFixed(1)}%</td><td class="${cls(r.net)}">${inr(r.net)}</td></tr>`; }).join('') + '</table>';
     return `<h3>Where the P&amp;L comes from</h3><p class="sub">Each trade is a bundle of legs that are opened and closed together. A group's net P&amp;L is the sum of <b>all</b> its legs. A table showing only one leg book (for example the parallel book) will therefore not equal the group total.</p><div class="grid2"><div>${t1}</div><div>${t2}</div></div>`;
   }
+  function periodLen(a, z) { const A = new Date(a + 'T00:00:00Z'), Z = new Date(z + 'T00:00:00Z'); let m = (Z.getUTCFullYear() - A.getUTCFullYear()) * 12 + Z.getUTCMonth() - A.getUTCMonth(); if (Z.getUTCDate() < A.getUTCDate()) m--; const y = Math.floor(m / 12), r = m % 12; return [y ? y + ' year' + (y > 1 ? 's' : '') : '', r ? r + ' month' + (r > 1 ? 's' : '') : ''].filter(Boolean).join(' ') || 'under a month'; }
   async function renderBT() {
     if (!$('#b_reports')) buildBT(); if (IDX_ERR || !INDEX.length) return;
     for (const id of S.sel) { try { await loadReport(id); } catch (e) { $('#b_meta').innerHTML = `<span class="neg">${esc(e.message)}</span>`; } }
     document.querySelectorAll('#b_reports .chip').forEach(c => c.classList.toggle('on', S.sel.includes(c.dataset.rep)));
     const M = BT = btModel(), body = $('#b_body');
+    if (!$('#b_period') && $('#b_reports')) $('#b_reports').insertAdjacentHTML('beforebegin', '<div id="b_period" class="period"></div>');
+    if ($('#b_period')) { const ds = M && M.days && M.days.length ? M.days.map(d => d.date) : [], a = ds[0], z = ds[ds.length - 1]; $('#b_period').innerHTML = a ? `<div class="pl">Backtested period</div><div class="pv">${fdate(a)} <span>to</span> ${fdate(z)}</div><div class="ps">${periodLen(a, z)} &nbsp;·&nbsp; ${ds.length.toLocaleString('en-IN')} trading sessions</div>` : ''; }
     if (!M) { $('#b_groups').innerHTML = ''; $('#b_meta').textContent = ''; body.innerHTML = '<div class="card"><p>Select a report above.</p></div>'; return; }
     $('#b_groups').innerHTML = M.avail.map(g => `<span class="chip ${M.groups.includes(g) ? 'on' : ''}" data-grp="${g}">${esc(gname(g))}</span>`).join('');
     $('#b_meta').innerHTML = M.reps.map(r => `<div><b>${esc(r.title)}</b> | ${fdate(r.range.start)} to ${fdate(r.range.end)} | generated ${esc(r.generated_at || '-')} | source files fingerprinted: ${Object.keys((r.provenance || {}).fingerprints || {}).length || 'none recorded'}</div>`).join('') + (M.reps.some(r => /SAMPLE|synthetic/i.test(r.title + (r.disclaimer || ''))) ? '<div class="note warn"><b>This is a synthetic sample report, not real results.</b></div>' : '');
@@ -222,10 +225,15 @@
   /* ================= SHARE CODES ================= */
   function renderShare() {
     let list = SHARE && Array.isArray(SHARE.strategies) ? SHARE.strategies : [];
-    if (!list.length && LIVE) list = (LIVE.strat || []).map(x => ({ name: x.name, exchange: x.ex, code: x.code }));
-    const btn = TGURL ? `<a class="tgbtn" href="${esc(TGURL)}" target="_blank" rel="noopener noreferrer">${TGSVG}Join Telegram</a>` : '';
-    $('#p_share').innerHTML = `<div class="card"><h2>Share codes</h2><p class="sub">Copy a strategy's share code to use it on your platform. Codes are published here when they are ready. This is information only, not advice; past performance does not guarantee future results.</p>${btn ? `<p>${btn}</p>` : ''}
-      ${list.length ? `<div class="scroll"><table class="t"><tr><th>Strategy</th><th>Exchange</th><th>Share code</th></tr>${list.map(x => `<tr><td>${esc(x.name || '')}</td><td>${x.exchange ? esc(x.exchange) : '-'}</td><td>${x.code ? `<span class="fp">${esc(x.code)}</span> <button class="sm" data-copycode="${esc(x.code)}">Copy</button>` : '<span class="sub">Not published yet</span>'}</td></tr>`).join('')}</table></div>` : '<p>No strategies listed yet.</p>'}</div>`;
+    if (!list.length && LIVE) list = (LIVE.strat || []).map(x => ({ name: x.name, exchange: x.ex, code: x.code, link: '' }));
+    const lnk = u => /^https?:\/\//i.test(u || '') ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">Open strategy</a> <button class="sm" data-copycode="${esc(u)}">Copy link</button>` : '<span class="sub">Not published yet</span>';
+    $('#p_share').innerHTML = `<div class="card"><h2>Strategies</h2><p class="sub">Open a strategy or copy its share code to use on your platform. Links and codes are published here when they are ready. Information only, not advice; past performance does not guarantee future results.</p>
+      ${list.length ? `<div class="scroll"><table class="t"><tr><th>Strategy</th><th>Exchange</th><th>Strategy link</th><th>Share code</th></tr>${list.map(x => `<tr><td style="white-space:normal;text-align:left"><b>${esc(x.name || '')}</b></td><td>${x.exchange ? esc(x.exchange) : '-'}</td><td>${lnk(x.link)}</td><td>${x.code ? `<span class="fp">${esc(x.code)}</span> <button class="sm" data-copycode="${esc(x.code)}">Copy</button>` : '<span class="sub">Not published yet</span>'}</td></tr>`).join('')}</table></div>` : '<p>No strategies listed yet.</p>'}</div>`;
+  }
+  function topTg() {
+    const old = document.getElementById('tgtop'); if (old) old.remove(); if (!TGURL) return;
+    const w = document.querySelector('header.top .wrap'); if (!w) return;
+    w.insertAdjacentHTML('beforeend', `<a id="tgtop" class="tgbtn" href="${esc(TGURL)}" target="_blank" rel="noopener noreferrer">${TGSVG}Telegram</a>`);
   }
   function loadCode(txt) {
     txt = String(txt || '').trim(); if (!txt) return false;
@@ -337,7 +345,7 @@
     $('#p_about').innerHTML = `
     <div class="card"><h2>How the numbers are made</h2><ul>
      <li><b>Backtest vs live.</b> Backtests are simulated on historical data. Live results are entered by hand by the owner, net of charges. They are always shown separately and never joined into one curve.</li>
-     <li><b>Size and capital.</b> Non-directional trades 195 units per leg; directional trades 65 units per leg, the same in every year. Deployed capital: non-directional ${inr(400000)}, directional ${inr(100000)}, both together ${inr(400000)} (margin offset), not ${inr(500000)}. Size = floor(capital ÷ deployed).</li>
+     <li><b>Size and capital.</b> Non-directional trades 195 units per leg; directional trades 65 units per leg, the same in every year. Deployed capital: non-directional ${inr(500000)}, directional ${inr(200000)}, both together ${inr(500000)} (margin offset), not ${inr(700000)}. Size = floor(capital ÷ deployed).</li>
      <li><b>ROI and drawdown</b> are a % of the capital on the slider. Idle capital between size steps dilutes ROI. Drawdown is the fall from the highest cumulative P&amp;L, measured daily for intraday strategies (per trade for positional).</li>
      <li><b>Combining reports</b> from different runs uses common dates only; costs are summed.</li>
      <li><b>DTE</b> = trading sessions to expiry: expiry day 0, the session before 1; weekends and holidays are not counted.</li>
@@ -398,13 +406,13 @@
     if (ok) return; $('#gate').style.display = 'flex';
     $('#agree').onclick = () => { try { localStorage.setItem('ghs_agreed', '1'); } catch (e) { /* ignore */ } $('#gate').style.display = 'none'; };
   }
-  const BUILD = '2026-11-01.12';
+  const BUILD = '2026-11-02.1';
   function loadAbs(src) { return new Promise((res, rej) => { const t = document.createElement('script'); t.src = src + '?v=' + BUILD; t.onload = res; t.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(t); }); }
   const TGSVG = '<svg viewBox="0 0 24 24"><path d="M21.9 3.4 2.7 10.8c-1.3.5-1.3 1.3-.2 1.6l4.9 1.5 1.9 5.8c.2.6.1.9.8.9.5 0 .8-.2 1.1-.5l2.4-2.3 4.9 3.6c.9.5 1.5.2 1.7-.8l3-14.5c.3-1.2-.4-1.8-1.3-1.2zM8.6 13.2l9.6-6c.5-.3.9-.1.5.2l-8 7.2-.3 3.3z"/></svg>';
   let TGURL = '', SHARE = null;
   /* Makes the page work even if an older index.html is still on the server. */
   async function ensureShell() {
-    const L = [['live', 'Daily PnL Report'], ['strategy', 'Backtest Analysis'], ['trade', 'Trade Analytics'], ['cost', 'Cost Lab'], ['share', 'Share Codes'], ['about', 'Method & costs']];
+    const L = [['live', 'Daily PnL Report'], ['strategy', 'Backtest Analysis'], ['trade', 'Trade Analytics'], ['cost', 'Cost Lab'], ['share', 'Strategies'], ['about', 'Method & costs']];
     $('#tabs').innerHTML = L.map(x => `<button data-t="${x[0]}">${x[1]}</button>`).join('');
     if (!$('#p_share')) { const sec = document.createElement('section'); sec.id = 'p_share'; sec.hidden = true; $('#p_about').before(sec); }
     if (!window.SLive) { try { await loadAbs('js/live.js'); } catch (e) { LIVE_ERR = e.message; } }
@@ -422,6 +430,7 @@
     const tl = cfg.telegram || ((LIVE && LIVE.links || []).find(l => /telegram|t\.me/i.test(l.label + l.url)) || {}).url;
     if (tl && /^https?:\/\//i.test(tl)) TGURL = tl;
     try { SHARE = await getJSON('share-codes.json'); } catch (e) { SHARE = null; }
+    topTg();
     if (S.tab === 'live' && !LIVE && INDEX.length && !/[#&]s=/.test(location.hash)) S.tab = 'strategy';
     $('#foot').insertAdjacentHTML('beforeend', `<div class="sub" style="margin-top:8px">Build ${BUILD} · reports found: ${INDEX.length} · live data: ${LIVE ? 'loaded (' + Object.keys(LIVE.days || {}).length + ' days)' : 'not found'}${DIAG ? ' · ' + esc(DIAG) : ''}</div>`);
     show(S.tab);

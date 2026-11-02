@@ -10,9 +10,9 @@
   'use strict';
 
   const CRORE = 1e7;
-  // Standard deployed capital per group (handover section 2). Both together = 4L, not 5L (margin offset).
-  const DEPLOYED = { NONDIRECTIONAL: 400000, DIRECTIONAL: 100000 };
-  const BOTH = 400000;
+  // Standard deployed capital per group (handover section 2). Non-directional 5L, directional 2L; both together 5L (margin offset).
+  const DEPLOYED = { NONDIRECTIONAL: 500000, DIRECTIONAL: 200000 };
+  const BOTH = 500000;
   // Slider start positions (Parameters of the zip). STT/exchange open at costs.actual_weighted.
   const PARAM_DEFAULTS = {
     slippage_pct: 0.02, brokerage_per_order: 20, brokerage_pct: 0, stt_pct: null, exchange_pct: null,

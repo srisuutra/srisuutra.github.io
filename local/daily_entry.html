@@ -56,6 +56,26 @@ table.in input{background:var(--inp)}table.in input.gp{background:#d7f0e2;border
 .mve:hover{border-color:#c9c0f7}.mve.on{background:#eeeafd;border-color:#c9c0f7}.mve b{font-size:14px}.mve small{display:block;color:#8a92ab;font-size:11px;margin-top:3px}.mve div:last-child{text-align:right}.mve strong{font-size:14px;display:block}.mve em{font-style:normal;font-size:11px;font-weight:600}
 .mvp{font-weight:600}.mvp.p{color:#12a36b}.mvp.n{color:#e03e3e}
 </style></head><body>
+<!--GHPUB-START-->
+<details class="ghpanel" id="ghp" style="background:var(--card,#fff);border:1px solid var(--line,#dfe3ee);border-radius:8px;padding:10px 14px;margin:0 0 14px"><summary style="cursor:pointer;font-weight:700">GitHub connection (set up once)</summary>
+<p style="font-size:12px;color:var(--mut,#6a7391);margin:8px 0">Lets this page publish straight to your website repository, so you do not have to upload files by hand. Create a token once: GitHub &rarr; your profile picture &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens &rarr; Fine-grained tokens &rarr; Generate new token. Repository access: <b>Only select repositories</b> &rarr; srisuutra.github.io. Permissions: <b>Contents = Read and write</b>. Paste the token below. It is kept only in this browser (never exported or sent anywhere except github.com).</p>
+<p style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0"><input id="gh_tok" type="password" placeholder="GitHub token (github_pat_...)" style="flex:2;min-width:220px"><input id="gh_repo" style="flex:1;min-width:180px" title="owner/repository"><input id="gh_br" style="width:80px" title="branch"><button type="button" onclick="GHPUB.saveUi()">Save</button><span id="gh_m" style="font-size:12px"></span></p></details>
+<script>
+const GHPUB={K:'srisuutra_gh_v1',get(){let c={repo:'srisuutra/srisuutra.github.io',branch:'main',token:''};try{Object.assign(c,JSON.parse(localStorage.getItem(this.K)||'{}'))}catch(e){}return c},
+ set(c){try{localStorage.setItem(this.K,JSON.stringify(c))}catch(e){}},
+ saveUi(){const c={token:document.getElementById('gh_tok').value.trim(),repo:document.getElementById('gh_repo').value.trim()||'srisuutra/srisuutra.github.io',branch:document.getElementById('gh_br').value.trim()||'main'};this.set(c);document.getElementById('gh_m').textContent='Saved in this browser.'},
+ initUi(){const c=this.get();document.getElementById('gh_tok').value=c.token;document.getElementById('gh_repo').value=c.repo;document.getElementById('gh_br').value=c.branch;if(!c.token)document.getElementById('ghp').open=true},
+ async put(path,text,msg){const c=this.get();if(!c.token)throw new Error('Open "GitHub connection", paste your token and press Save first.');
+  const api='https://api.github.com/repos/'+c.repo+'/contents/'+path.split('/').map(encodeURIComponent).join('/'),h={Authorization:'Bearer '+c.token,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};
+  let sha;const g=await fetch(api+'?ref='+encodeURIComponent(c.branch),{headers:h});
+  if(g.ok){sha=(await g.json()).sha}else if(g.status===401||g.status===403){throw new Error('GitHub refused the token ('+g.status+'). Check that it is not expired and has Contents: Read and write on '+c.repo+'.')}else if(g.status!==404){throw new Error('GitHub error '+g.status)}
+  const bytes=new TextEncoder().encode(text);let bin='';for(let i=0;i<bytes.length;i+=32768)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+32768));
+  const r=await fetch(api,{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},h),body:JSON.stringify({message:msg,content:btoa(bin),branch:c.branch,sha})});
+  if(!r.ok){let m='';try{m=(await r.json()).message}catch(e){}throw new Error('GitHub error '+r.status+(m?': '+m:''))}return true}};
+GHPUB.initUi();
+</script>
+<!--GHPUB-END-->
+
 <div class="panel"><div class="bar">
 <b>Report date</b><label>As of</label><input type="date" id="asof">
 </div></div>
@@ -79,7 +99,7 @@ table.in input{background:var(--inp)}table.in input.gp{background:#d7f0e2;border
 <div class="panel bar">
 <button onclick="xl()">Save Excel (database)</button>
 <button class="g" onclick="document.getElementById('f').click()">Load Excel</button><input type="file" id="f" accept=".xlsx,.xls" hidden>
-<button class="g" onclick="pdf()">PDF</button><button onclick="expSite()" style="background:#c9a43b;border-color:#c9a43b;color:#1c2a4a">Export website data (data.json)</button><button class="g" onclick="png()">Report image (PNG)</button><button class="g" onclick="png2()">Summary image (PNG)</button><button class="g" onclick="clr()">Clear all</button>
+<button class="g" onclick="pdf()">PDF</button><button onclick="pubSite()" style="background:#c9a43b;border-color:#c9a43b;color:#1c2a4a">Publish to website (GitHub)</button><button class="g" onclick="expSite()">Download data.json</button><span id="pubm" style="font-size:12px"></span><button class="g" onclick="png()">Report image (PNG)</button><button class="g" onclick="png2()">Summary image (PNG)</button><button class="g" onclick="clr()">Clear all</button>
 <span style="color:var(--mut);font-size:12px">Autosaves in this browser. Excel file is your master copy.</span></div>
 
 <div class="panel bar"><b>Format selected text</b>
@@ -273,8 +293,9 @@ function cpy(id,b){const el=$(id),t=b.textContent;b.textContent='Copying…';
  const p=html2canvas(el,{scale:el.offsetWidth>1400?2:3,backgroundColor:'#fff'}).then(c=>new Promise(r=>c.toBlob(r,'image/png')));
  const fb=()=>p.then(bl=>{const u=URL.createObjectURL(bl);$('ov').innerHTML='<p style="color:#fff">Your browser blocked direct copy. Right-click (or long-press) the image and choose Copy image. Click anywhere to close.</p><img src="'+u+'">';$('ov').style.display='block';done(t)});
  try{if(!(navigator.clipboard&&window.ClipboardItem)){fb();return}navigator.clipboard.write([new ClipboardItem({'image/png':p})]).then(()=>done('Copied ✓'),fb)}catch(e){fb()}}
-function expSite(){const o={v:1,title:(S.title||'').replace(/<[^>]+>/g,'').trim()||'Track record',sub:(S.sub||'').replace(/<[^>]+>/g,'').trim(),asof:S.asof,cumOn:S.cumOn!==false,cumCap:S.cumCap,strat:S.strat.map(x=>({id:x.id,name:x.name,cap:num(x.cap),mult:x.mult,ex:x.ex||'',code:x.code||''})),days:S.days,links:S.links.filter(l=>l.on&&l.url.trim()).map(l=>({label:l.label,url:safe(l.url)})),notes:S.notes.filter(n=>n.on&&n.t.trim()).map(n=>n.t)};
- const u=URL.createObjectURL(new Blob([JSON.stringify(o)],{type:'application/json'}));dl(u,'data.json')}
+function siteObj(){return {v:1,title:(S.title||'').replace(/<[^>]+>/g,'').trim()||'Track record',sub:(S.sub||'').replace(/<[^>]+>/g,'').trim(),asof:S.asof,cumOn:S.cumOn!==false,cumCap:S.cumCap,strat:S.strat.map(x=>({id:x.id,name:x.name,cap:num(x.cap),mult:x.mult,ex:x.ex||'',code:x.code||''})),days:S.days,links:S.links.filter(l=>l.on&&l.url.trim()).map(l=>({label:l.label,url:safe(l.url)})),notes:S.notes.filter(n=>n.on&&n.t.trim()).map(n=>n.t)};
+function expSite(){const u=URL.createObjectURL(new Blob([JSON.stringify(siteObj())],{type:'application/json'}));dl(u,'data.json')}
+async function pubSite(){const m=$('pubm');m.textContent=' Publishing...';try{await GHPUB.put('live/data.json',JSON.stringify(siteObj()),'Update daily P&L '+(S.asof||''));m.textContent=' Published. The site updates in about a minute (press Ctrl+F5).'}catch(e){m.textContent=' Not published: '+e.message}}
 function shot(cb,el){el=el||$('report');html2canvas(el,{scale:el.offsetWidth>1400?2:3,backgroundColor:'#fff'}).then(cb)}
 function png2(){shot(c=>{const u=c.toDataURL('image/png');dl(u,'SRISUUTRA_summary.png');$('ov').innerHTML='<p style="color:#fff">Summary image generated. If it did not download, right-click or long-press to save. Click anywhere to close.</p><img src="'+u+'">';$('ov').style.display='block'},$('summary'))}
 function png(){shot(c=>{const u=c.toDataURL('image/png');dl(u,'SRISUUTRA_report.png');$('ov').innerHTML='<p style="color:#fff">Image generated. If it did not download, right-click or long-press to save. Links in an image cannot be clicked: the link text and QR code are shown, and the PDF keeps links clickable. Click anywhere to close.</p><img src="'+u+'">';$('ov').style.display='block'})}
