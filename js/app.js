@@ -6,7 +6,7 @@
   'use strict';
   const E = window.GHE, C = window.GC, esc = C.esc, inr = C.inr, pc = C.pc, cls = C.cls;
   const LIVE_URLS = ['live/data.json', 'live/live.json', 'data.json'], INDEX_URL = 'reports/index.json';
-  const MAXM = 10;
+  const MAXM = 100, FREEZE_LOTS = 27, ordF = k => Math.max(1, Math.ceil(k / FREEZE_LOTS));
   const GROUP_NAME = { NONDIRECTIONAL: 'Nifty Non Directional Intraday', DIRECTIONAL: 'Nifty Intraday Option Buying (Pyramid L1-L3)', OPTION_BUYING: 'Nifty Intraday Option Buying (Pyramid L1-L3)' };
   const gname = g => GROUP_NAME[g] || g;
   /* The combined deployed capital of a report applies when all of its strategies are selected. */
@@ -134,6 +134,7 @@
     const dep = E.deployed(groups, extra, both), k = Math.max(1, Math.min(MAXM, Math.round(+S.mult || 1))), cap = dep * k;
     const comb = E.combineReports(reps, groups), hasT = comb.atoms.length > 0, notes = comb.notes.slice();
     let priced = [], days;
+    S.cfg.order_mult = ordF(k);
     if (hasT) { priced = E.repriceAtoms(comb.atoms, S.cfg, k); days = E.dailyFromPriced(comb.sessions, priced); }
     else { const m = {}; reps[0].daily.forEach(d => { m[d.date] = d; }); days = comb.sessions.map(d => ({ date: d, gross: m[d].gross * k, costs: m[d].costs * k, net: m[d].net * k, trades: m[d].trades }));
       notes.push('This report was exported without trade legs: size scaling works, but trade analytics are unavailable.'); }
@@ -186,11 +187,12 @@
   function updMult(M) {
     if (!$('#b_mult') || !M) return; const k = M.k, ae = document.activeElement;
     if (ae !== $('#b_mult')) $('#b_mult').value = k;
+    if (ae !== $('#b_multn')) $('#b_multn').value = k;
     $('#m_k').textContent = k + '×';
     const units = 65 * k;
     $('#q_b').textContent = 'Quantity: ' + units + ' units (' + k + ' lot' + (k > 1 ? 's' : '') + ') per leg';
     $('#q_s').textContent = k === 1 ? 'Standardised across the entire test period. Every trade in this backtest uses the same 65 units, so results are not inflated by changing position size.' : 'Base backtest: 65 units (1 lot) per leg, standardised across the entire test period. Shown here at ' + k + '× that size.';
-    $('#m_info').innerHTML = 'Capital <b>' + inr(M.cap) + '</b> &nbsp;·&nbsp; Quantity <b>' + units + ' units per leg</b> &nbsp;·&nbsp; ROI and drawdown are measured on this capital';
+    $('#m_info').innerHTML = 'Capital <b>' + inr(M.cap) + '</b> &nbsp;·&nbsp; Quantity <b>' + units + ' units per leg</b> &nbsp;·&nbsp; Brokerage <b>' + ordF(k) + '×</b> &nbsp;·&nbsp; ROI and drawdown are measured on this capital';
     const at = (M.comb && M.comb.atoms) || [], o = at.reduce((t, a) => t + (a.o || 0), 0), b = at.reduce((t, a) => t + (a.brk || 0), 0), own = o ? b / o : 0, cur = S.cfg.settings.brokerage_per_order;
     if (ae !== $('#b_brk')) $('#b_brk').value = cur == null ? '' : cur;
     $('#b_brk').placeholder = own ? own.toFixed(2) : '';
@@ -202,9 +204,9 @@
     document.querySelectorAll('#b_reports .chip').forEach(c => c.classList.toggle('on', S.sel.includes(c.dataset.rep)));
     const M = BT = btModel(), body = $('#b_body');
     if (!$('#b_period') && $('#b_reports')) $('#b_reports').insertAdjacentHTML('beforebegin', '<div id="b_period" class="period"></div><div class="qtybox"><b id="q_b">Quantity: 65 units (1 lot) per leg</b><span id="q_s">Standardised across the entire test period. Every trade in this backtest uses the same 65 units, so results are not inflated by changing position size.</span></div>' +
-      '<div class="multbox" id="b_multbox"><div class="mh"><b>Position size multiplier</b><span class="mk" id="m_k">1×</span></div><input type="range" id="b_mult" min="1" max="' + MAXM + '" step="1" value="1"><div class="mt"><span>1×</span><span>2×</span><span>3×</span><span>4×</span><span>5×</span><span>6×</span><span>7×</span><span>8×</span><span>9×</span><span>10×</span></div><div class="mi" id="m_info"></div>' +
+      '<div class="multbox" id="b_multbox"><div class="mh"><b>Position size multiplier</b><span class="mc"><label for="b_multn" class="sub">Custom (1 to 100)</label> <input type="number" id="b_multn" min="1" max="100" step="1" value="1"><span class="mk" id="m_k">1×</span></span></div><input type="range" id="b_mult" min="1" max="' + MAXM + '" step="1" value="1"><div class="mt"><span>1×</span><span>27×</span><span>54×</span><span>81×</span><span>100×</span></div><div class="mi" id="m_info"></div>' +
       '<div class="mb"><label for="b_brk">Brokerage per order (₹)</label><input type="number" id="b_brk" min="0" step="1"><button class="sm" id="b_brkr" type="button">Use backtest figure</button><span class="sub" id="m_brkn"></span></div>' +
-      '<p class="mnote"><b>Note on brokerage.</b> Brokerage is charged per order rather than per unit, so it is held constant as the multiplier increases. All other outputs (returns, drawdown, slippage, statutory charges and taxes) scale with the multiplier. Results are affected by brokerage only if you edit the brokerage figure above.</p></div>');
+      '<p class="mnote"><b>Note on brokerage.</b> Brokerage is charged per order rather than per unit, so it does not rise in proportion to the multiplier. It steps up by one times the base brokerage for every 27× of size, because large orders are split at the exchange freeze limit. The current freeze quantity for Nifty is 1,800 units, which is 27 lots of 65 units (rounded down). Accordingly, 1× to 27× carries 1× brokerage, 28× to 54× carries 2×, 55× to 81× carries 3×, and 82× to 100× carries 4× (for example, at 70× brokerage is 3×). All other outputs (returns, drawdown, slippage, statutory charges and taxes) scale with the multiplier. Results are affected by brokerage beyond this only if you edit the brokerage figure above.</p></div>');
     updMult(M);
     if ($('#b_period')) { const ds = M && M.days && M.days.length ? M.days.map(d => d.date) : [], a = ds[0], z = ds[ds.length - 1]; $('#b_period').innerHTML = a ? `<div class="pl">Backtested period</div><div class="pv">${fdate(a)} <span>to</span> ${fdate(z)}</div><div class="ps">${periodLen(a, z)} &nbsp;·&nbsp; ${ds.length.toLocaleString('en-IN')} trading sessions</div>` : ''; }
     if (!M) { $('#b_groups').innerHTML = ''; $('#b_meta').textContent = ''; body.innerHTML = '<div class="card"><p>Select a report above.</p></div>'; return; }
@@ -351,7 +353,7 @@
         r.querySelector('button').style.visibility = set != null ? 'visible' : 'hidden';
       });
       $('#b_stat').checked = S.cfg.statutory_on;
-      const T = E.costTotals(M.priced), A = E.costTotals(E.repriceAtoms(M.comb.atoms, Object.assign(E.defaultCfg(), { orders_scale_with_size: S.cfg.orders_scale_with_size }), M.k)), line = (l, v, a) => `<tr><td>${l}</td><td>${inr(v, 2)}</td><td>${T.gross ? (v / Math.abs(T.gross) * 100).toFixed(1) + '%' : '-'}</td><td class="${cls(a - v)}">${inr(v - a, 2)}</td></tr>`;
+      const T = E.costTotals(M.priced), A = E.costTotals(E.repriceAtoms(M.comb.atoms, Object.assign(E.defaultCfg(), { orders_scale_with_size: S.cfg.orders_scale_with_size, order_mult: ordF(M.k) }), M.k)), line = (l, v, a) => `<tr><td>${l}</td><td>${inr(v, 2)}</td><td>${T.gross ? (v / Math.abs(T.gross) * 100).toFixed(1) + '%' : '-'}</td><td class="${cls(a - v)}">${inr(v - a, 2)}</td></tr>`;
       $('#b_costtbl').innerHTML = `<table class="t"><tr><th>Line</th><th>₹</th><th>% of |gross|</th><th>vs backtest</th></tr><tr><td><b>Gross</b></td><td>${inr(T.gross, 2)}</td><td></td><td>${inr(T.gross - A.gross, 2)}</td></tr>` +
         [['Brokerage', 'brk'], ['Other', 'other'], ['STT', 'stt'], ['Exchange', 'exchange'], ['SEBI', 'sebi'], ['Stamp', 'stamp'], ['IPFT', 'ipft'], ['GST', 'gst']].map(([l, k]) => line(l, T[k], A[k])).join('') +
         `<tr class="hl"><td><b>Total costs</b></td><td>${inr(T.costs, 2)}</td><td>${T.gross ? (T.costs / Math.abs(T.gross) * 100).toFixed(1) + '%' : '-'}</td><td>${inr(T.costs - A.costs, 2)}</td></tr><tr class="hl"><td><b>Net</b></td><td class="${cls(T.net)}">${inr(T.net, 2)}</td><td></td><td>${inr(T.net - A.net, 2)}</td></tr></table><p class="sub">Turnover ${inr(T.turnover)}. “vs backtest” = this setting minus the backtest's own figure.</p>`;
@@ -374,6 +376,7 @@
     const rs = Object.values(REP);
     $('#p_about').innerHTML = `
     <div class="card"><h2>How the numbers are made</h2><ul>
+     <li><b>Multiplier and brokerage.</b> The position size multiplier (1× to 100×) scales quantity, capital, returns, drawdown, slippage and statutory charges. Brokerage is charged per order rather than per unit, so it is not scaled in proportion; it steps up by one times the base brokerage for every 27× of size. This follows the current Nifty freeze quantity of 1,800 units, which is 27 lots of 65 units (rounded down), above which orders are split. Examples: 27× carries 1× brokerage, 28× carries 2×, 70× carries 3×, 100× carries 4×.</li>
      <li><b>Backtest vs live.</b> Backtests are simulated on historical data. Live results are entered by hand by the owner, net of charges; they are unaudited and can be verified on Tradetron. They are always shown separately and never joined into one curve.</li>
      <li><b>ROI and drawdown</b> are a % of the capital on the slider. Idle capital between size steps dilutes ROI. Drawdown is the fall from the highest cumulative P&amp;L, measured daily for intraday strategies (per trade for positional).</li>
      <li><b>Combining reports</b> from different runs uses common dates only; costs are summed.</li>
@@ -421,6 +424,7 @@
   document.addEventListener('input', e => {
     const t = e.target;
     if (t.id === 'b_mult') { S.mult = +t.value; renderBT(); }
+    else if (t.id === 'b_multn') { const v = Math.round(+t.value); if (v >= 1 && v <= MAXM) { S.mult = v; renderBT(); } }
     else if (t.id === 'b_cap') { S.cap = +t.value; renderBT(); }
     else if (t.id === 'l_cap') { S.lcap = +t.value; renderLive(); }
     else if (t.id === 'b_scale') { S.cfg.orders_scale_with_size = t.checked; BT && renderBT(); }
@@ -429,7 +433,7 @@
     else if (/^(b_|l_)p[ft]$/.test(t.id)) { const live = t.id[0] === 'l'; if (live) { S[t.id === 'l_pf' ? 'lpf' : 'lpt'] = t.value; renderLive(); } else { S[t.id === 'b_pf' ? 'pf' : 'pt'] = t.value; BT && updateBT(BT); } }
   });
 
-  document.addEventListener('change', e => { if (e.target.id === 'b_brk') { const v = e.target.value.trim(); S.cfg.settings.brokerage_per_order = v === '' || !isFinite(+v) || +v < 0 ? null : +v; renderBT(); return; } if (e.target.id === 'b_capn') { S.cap = Math.max(0, +e.target.value || 0); renderBT(); } });
+  document.addEventListener('change', e => { if (e.target.id === 'b_multn') { S.mult = Math.max(1, Math.min(MAXM, Math.round(+e.target.value) || 1)); renderBT(); return; } if (e.target.id === 'b_brk') { const v = e.target.value.trim(); S.cfg.settings.brokerage_per_order = v === '' || !isFinite(+v) || +v < 0 ? null : +v; renderBT(); return; } if (e.target.id === 'b_capn') { S.cap = Math.max(0, +e.target.value || 0); renderBT(); } });
 
   /* ---------- gate + boot ---------- */
   function gate() {

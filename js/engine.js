@@ -41,7 +41,7 @@
     const st = cfg.settings || {};
     const statOn = cfg.statutory_on !== false;
     const scale = cfg.orders_scale_with_size !== false;
-    const ko = scale ? k : 1;
+    const ko = scale ? k : Math.max(1, cfg.order_mult || 1);   // order_mult: extra orders from splitting at the exchange freeze limit
     if (k === 0) return { gross: 0, brk: 0, other: 0, stt: 0, exchange: 0, sebi: 0, stamp: 0, ipft: 0, gst: 0, costs: 0, net: 0, tb: 0, ts: 0 };
 
     const allNull = SETTING_KEYS.every(x => !has(st[x]));

@@ -138,3 +138,5 @@ header.top .wrap{position:relative}
 .multbox .mb{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
 .multbox .mb input{width:110px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:inherit;font:inherit}
 .multbox .mnote{font-size:12.5px;color:var(--mut);margin:6px 0 0;border-left:3px solid var(--gold2);padding-left:10px}
+
+.multbox .mc{display:flex;align-items:center;gap:8px}.multbox .mc input{width:80px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:inherit;font:inherit}
