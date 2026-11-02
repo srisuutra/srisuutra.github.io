@@ -34,6 +34,7 @@ GHPUB.initUi();
 
 <div class="panel"><p><b>Step 1.</b> Choose the report file from the backtest tool (the big .json file).</p><input type="file" id="f1" accept=".json">
 <p><b>Step 2 (optional).</b> Choose the current <code>reports/index.json</code> from your repo, so older reports stay listed. Skip this to start a fresh list.</p><input type="file" id="f2" accept=".json">
+<p><b>Starting capital (both strategies together), Rs</b> <input type="number" id="cap" value="300000" step="10000" style="width:130px"> <span class="mut">ROI and drawdown are calculated on this. Clear the box to use the capital stored in the report.</span></p>
 <p><button id="go" disabled>Prepare files</button></p><div id="log"></div>
 <p id="dl" hidden><button class="gold" id="pub" type="button">Publish to GitHub now</button> <button class="g" id="d1"></button> <button class="g" id="d2">Download index.json</button></p></div>
 <script>
@@ -67,6 +68,7 @@ $('go').onclick=()=>{try{
  const r2=x=>Math.round(x*100)/100,dm=new Map();(p.daily||[]).forEach(d=>dm.set(d.date,{date:d.date,gross:0,costs:0,net:0,ids:new Set()}));
  keep.forEach(t=>{const r=dm.get(t.x);if(!r)return;r.gross+=t.gross;r.net+=t.net;r.costs+=t.gross-t.net;r.ids.add(t.id)});
  p.daily=[...dm.values()].map(r=>({date:r.date,gross:r2(r.gross),costs:r2(r.costs),net:r2(r.net),trades:r.ids.size}));
+ const capIn=parseFloat($('cap').value);if(capIn>0){p.capital=Object.assign(p.capital||{},{deployed:capIn,chosen:capIn});(p.summary||(p.summary={})).capital=capIn;p.summary.base_capital=capIn;log('Starting capital set to Rs '+capIn.toLocaleString('en-IN')+'.','ok')}
  const sm=p.summary||(p.summary={}),T=sm.totals||(sm.totals={}),sum=k=>r2(keep.reduce((a,t)=>a+(t[k]||0),0)),cap=sm.capital;
  T.gross=sum('gross');T.brokerage=sum('brk');T.stt=sum('stt');T.exchange=sum('exchange');T.sebi=sum('sebi');T.stamp=sum('stamp');T.ipft=sum('ipft');T.gst=sum('gst');T.other=0;T.other_charges=sum('oc');T.net=sum('net');T.costs=r2(T.gross-T.net);T.turnover=r2(keep.reduce((a,t)=>a+(t.tb||0)+(t.ts||0),0));
  sm.roi_pct=r2(T.net/cap*100);let cum=0,pk=0,mdd=0;p.daily.forEach(d=>{cum+=d.net;pk=Math.max(pk,cum);mdd=Math.max(mdd,pk-cum)});sm.max_drawdown=r2(mdd);sm.max_drawdown_pct=r2(mdd/cap*100);

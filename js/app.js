@@ -316,7 +316,7 @@
       if (per.some(p => p.mm.dd.maxPct > 100)) h += '<div class="note">A drawdown above 100% means that group, on its own, lost more than the capital allotted to it from its best point. Groups are meant to run together: the portfolio drawdown (shown above) is measured on the combined capital.</div>';
       if (per.length === 2) { const a = per[0], b = per[1], la = a.d.map(x => x.net < 0), lb = b.d.map(x => x.net < 0), both = la.filter((v, i) => v && lb[i]).length, na = la.filter(Boolean).length, nb = lb.filter(Boolean).length;
         h += `<div class="note">${esc(gname(a.g))} lost on <b>${na}</b> days, ${esc(gname(b.g))} on <b>${nb}</b>. Both lost on the same day <b>${both}</b> times${na ? ` (${(both / na * 100).toFixed(0)}% of ${esc(gname(a.g))}'s losing days, ${nb ? (both / nb * 100).toFixed(0) : 0}% of ${esc(gname(b.g))}'s)` : ''}.</div>`; }
-      h += `<p class="sub">Combined capital is ${inr(M.dep)} (margin offset), not the sum of the two.</p>`; $('#b_cmp').innerHTML = h; $('#b_cmp_card').hidden = false;
+      const sumCap = M.groups.reduce((t, g) => t + (M.extra[g] || 0), 0); h += `<p class="sub">Combined starting capital is ${inr(M.dep)}${sumCap && sumCap !== M.dep ? ' (not the sum of the two, ' + inr(sumCap) + ')' : ''}; combined ROI and drawdown use it.</p>`; $('#b_cmp').innerHTML = h; $('#b_cmp_card').hidden = false;
     } else $('#b_cmp_card').hidden = true;
     // trade analytics
     if (M.hasT) {
