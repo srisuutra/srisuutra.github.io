@@ -117,13 +117,17 @@ GHPUB.initUi();
 <div id="ov" onclick="this.style.display='none'"></div>
 
 <script>
-const $=id=>document.getElementById(id),K='srisutra_v1';
+const $=id=>document.getElementById(id),K='srisutra_v1',OB_NAME='Nifty Intraday Option Buying (Pyramid L1-L3)';
 let S=load();
 function uid(){return 's'+Math.random().toString(36).slice(2,8)}
-function demo(){const a=[{id:uid(),name:'Strategy A',cap:500000,mult:1},{id:uid(),name:'Strategy B',cap:300000,mult:1},{id:uid(),name:'Strategy C',cap:100000,mult:1}];
- const days={};[3,4,5,6,7,10,11,12].forEach((d,i)=>{const k='2026-10-'+String(d).padStart(2,'0');days[k]={};a.forEach((s,j)=>days[k][s.id]=Math.round(((i*7+j*13)%11-4)*s.cap/4000))});
- return{title:'SRISUUTRA ALGO TRADING',notes:'',strat:a,days,asof:'2026-10-12',from:'2026-10-01',to:'2026-10-12'}}
-function norm(o){o.links=o.links||[];o.notes=Array.isArray(o.notes)?o.notes:(o.notes?[{t:String(o.notes).replace(/<[^>]+>/g,' ').trim(),on:true}]:[]);return o}
+/* Starts from the data currently on the website, so publishing never overwrites real history with demo numbers. */
+function demo(){return {"title":"SRISUUTRA ALGO TRADING","notes":[],"links":[{"on":true,"label":"Telegram","url":"https://t.me/SRISUUTRA_ALGO_TRADING"}],"cumOn":true,"cumCap":3000000,"strat":[{"id":"nd","name":"Nifty Non Directional Intraday","cap":160000,"mult":1,"ex":"NFO","code":""},{"id":"ob","name":"Nifty Intraday Option Buying (Pyramid L1-L3)","cap":100000,"mult":1,"ex":"NFO","code":""}],"days":{"2026-10-14":{"nd":-15112,"ob":-12269},"2026-10-15":{"nd":0,"ob":63590},"2026-10-16":{"nd":-41607,"ob":0},"2026-10-19":{"nd":0,"ob":11571},"2026-10-21":{"nd":-773,"ob":96733},"2026-10-22":{"nd":-10325,"ob":-12334},"2026-10-23":{"nd":0,"ob":26050},"2026-10-26":{"nd":-77909,"ob":116795},"2026-10-27":{"nd":12056,"ob":0},"2026-10-28":{"nd":-34525,"ob":-30303},"2026-10-29":{"nd":-28252,"ob":-3660},"2026-10-30":{"nd":-4335,"ob":-16280}},"asof":"2026-10-30","from":"2026-10-14","to":"2026-10-30"}}
+/* Two strategies only: Bullish + Bearish are combined into one (values are multiplied by their multipliers first). */
+function mergeTwo(o){const st=o.strat||[],mem=st.filter(s=>/bullish|bearish/i.test(s.name||''));if(mem.length<2)return o;
+ const id=mem[0].id,m={id,name:OB_NAME,cap:mem.reduce((t,s)=>t+(parseFloat(s.cap)||0),0),mult:1,ex:mem[0].ex||'NFO',code:''};
+ Object.keys(o.days||{}).forEach(d=>{const r=o.days[d];let any=false,sum=0;mem.forEach(s=>{const v=r[s.id];if(v!==''&&v!=null){any=true;sum+=(parseFloat(v)||0)*(parseFloat(s.mult)||1)}});mem.forEach(s=>{delete r[s.id]});r[id]=any?sum:''});
+ const at=st.indexOf(mem[0]);o.strat=st.filter(s=>!mem.includes(s));o.strat.splice(at,0,m);return o}
+function norm(o){mergeTwo(o);o.links=o.links||[];o.notes=Array.isArray(o.notes)?o.notes:(o.notes?[{t:String(o.notes).replace(/<[^>]+>/g,' ').trim(),on:true}]:[]);return o}
 function load(){try{return norm(JSON.parse(localStorage.getItem(K))||demo())}catch(e){return norm(demo())}}
 let CW=400,CH=220;
 const tc=v=>v>0?' gp':v<0?' gn':'';
@@ -283,7 +287,7 @@ $('f').onchange=e=>{const fl=e.target.files[0];if(!fl)return;const r=new FileRea
  const st=g('Strategies').slice(1).filter(r=>r[0]!=null),dl_=g('Daily PNL');
  const strat=st.map(r=>({id:uid(),name:String(r[0]),cap:num(r[1]),mult:r[2]==null?1:num(r[2]),ex:r[3]==null?'':String(r[3]),code:r[4]==null?'':String(r[4])})),days={};
  dl_.slice(1).forEach(r=>{if(r[0]==null)return;let d=r[0];if(typeof d=='number'){d=new Date(Math.round((d-25569)*864e5)).toISOString().slice(0,10)}days[d]={};strat.forEach((s,i)=>{if(r[i+1]!=null&&r[i+1]!=='')days[d][s.id]=num(r[i+1])})});
- const ds=Object.keys(days).sort();S={...S,strat,days,asof:ds.pop()||'',from:Object.keys(days).sort()[0]||'',to:''};S.to=S.asof;
+ const ds=Object.keys(days).sort();S=norm({...S,strat,days,asof:ds.pop()||'',from:Object.keys(days).sort()[0]||'',to:''});S.to=S.asof;
  if(wb.Sheets['Notes'])S.notes=g('Notes').slice(1).filter(r=>r[1]!=null).map(r=>({on:r[0]=='Y',t:String(r[1])}));
  if(wb.Sheets['Links'])S.links=g('Links').slice(1).filter(r=>r[2]!=null).map(r=>({on:r[0]=='Y',label:String(r[1]||''),url:String(r[2])}));
  if(wb.Sheets['Settings']){const r=g('Settings')[1];S.cumCap=r&&r[1]!=null&&r[1]!==''?num(r[1]):'';const r2=g('Settings')[2];S.cumOn=!(r2&&r2[1]=='N')}
@@ -293,7 +297,7 @@ function cpy(id,b){const el=$(id),t=b.textContent;b.textContent='Copying…';
  const p=html2canvas(el,{scale:el.offsetWidth>1400?2:3,backgroundColor:'#fff'}).then(c=>new Promise(r=>c.toBlob(r,'image/png')));
  const fb=()=>p.then(bl=>{const u=URL.createObjectURL(bl);$('ov').innerHTML='<p style="color:#fff">Your browser blocked direct copy. Right-click (or long-press) the image and choose Copy image. Click anywhere to close.</p><img src="'+u+'">';$('ov').style.display='block';done(t)});
  try{if(!(navigator.clipboard&&window.ClipboardItem)){fb();return}navigator.clipboard.write([new ClipboardItem({'image/png':p})]).then(()=>done('Copied ✓'),fb)}catch(e){fb()}}
-function siteObj(){return {v:1,title:(S.title||'').replace(/<[^>]+>/g,'').trim()||'Track record',sub:(S.sub||'').replace(/<[^>]+>/g,'').trim(),asof:S.asof,cumOn:S.cumOn!==false,cumCap:S.cumCap,strat:S.strat.map(x=>({id:x.id,name:x.name,cap:num(x.cap),mult:x.mult,ex:x.ex||'',code:x.code||''})),days:S.days,links:S.links.filter(l=>l.on&&l.url.trim()).map(l=>({label:l.label,url:safe(l.url)})),notes:S.notes.filter(n=>n.on&&n.t.trim()).map(n=>n.t)};
+function siteObj(){return {v:1,title:(S.title||'').replace(/<[^>]+>/g,'').trim()||'Track record',sub:(S.sub||'').replace(/<[^>]+>/g,'').trim(),asof:S.asof,cumOn:S.cumOn!==false,cumCap:S.cumCap,strat:S.strat.map(x=>({id:x.id,name:x.name,cap:num(x.cap),mult:x.mult,ex:x.ex||'',code:x.code||''})),days:S.days,links:S.links.filter(l=>l.on&&l.url.trim()).map(l=>({label:l.label,url:safe(l.url)})),notes:S.notes.filter(n=>n.on&&n.t.trim()).map(n=>n.t)};}
 function expSite(){const u=URL.createObjectURL(new Blob([JSON.stringify(siteObj())],{type:'application/json'}));dl(u,'data.json')}
 async function pubSite(){const m=$('pubm');m.textContent=' Publishing...';try{await GHPUB.put('live/data.json',JSON.stringify(siteObj()),'Update daily P&L '+(S.asof||''));m.textContent=' Published. The site updates in about a minute (press Ctrl+F5).'}catch(e){m.textContent=' Not published: '+e.message}}
 function shot(cb,el){el=el||$('report');html2canvas(el,{scale:el.offsetWidth>1400?2:3,backgroundColor:'#fff'}).then(cb)}
