@@ -90,7 +90,7 @@
   }
 
   /* ---------- shared UI helpers ---------- */
-  const badge = k => k === 'bt' ? '<span class="badge bt">BACKTEST (simulated)</span>' : k === 'lv' ? '<span class="badge lv">LIVE (owner-entered, net of charges)</span>' : '<span class="badge mix">INFO</span>';
+  const badge = k => k === 'bt' ? '<span class="badge bt">BACKTEST (simulated)</span>' : k === 'lv' ? '<span class="badge lv">LIVE (owner-entered, unaudited)</span>' : '<span class="badge mix">INFO</span>';
   const kpi = (l, v, sub, c) => `<div class="kpi"><span>${esc(l)}</span><strong class="${c || ''}">${v}</strong><em>${sub || ''}</em></div>`;
   const fdate = d => d ? new Date(d + 'T00:00:00Z').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '-';
   const mlabel = k => /^\d{4}-\d{2}$/.test(k) ? new Date(k + '-01T00:00:00Z').toLocaleString('en-IN', { month: 'short', year: '2-digit', timeZone: 'UTC' }) : k;
@@ -187,7 +187,7 @@
     for (const id of S.sel) { try { await loadReport(id); } catch (e) { $('#b_meta').innerHTML = `<span class="neg">${esc(e.message)}</span>`; } }
     document.querySelectorAll('#b_reports .chip').forEach(c => c.classList.toggle('on', S.sel.includes(c.dataset.rep)));
     const M = BT = btModel(), body = $('#b_body');
-    if (!$('#b_period') && $('#b_reports')) $('#b_reports').insertAdjacentHTML('beforebegin', '<div id="b_period" class="period"></div>');
+    if (!$('#b_period') && $('#b_reports')) $('#b_reports').insertAdjacentHTML('beforebegin', '<div id="b_period" class="period"></div><div class="qtybox"><b>Quantity: 65 units (1 lot) per leg</b><span>Standardised across the entire test period. Every trade in this backtest uses the same 65 units, so results are not inflated by changing position size.</span></div>');
     if ($('#b_period')) { const ds = M && M.days && M.days.length ? M.days.map(d => d.date) : [], a = ds[0], z = ds[ds.length - 1]; $('#b_period').innerHTML = a ? `<div class="pl">Backtested period</div><div class="pv">${fdate(a)} <span>to</span> ${fdate(z)}</div><div class="ps">${periodLen(a, z)} &nbsp;·&nbsp; ${ds.length.toLocaleString('en-IN')} trading sessions</div>` : ''; }
     if (!M) { $('#b_groups').innerHTML = ''; $('#b_meta').textContent = ''; body.innerHTML = '<div class="card"><p>Select a report above.</p></div>'; return; }
     $('#b_groups').innerHTML = M.avail.map(g => `<span class="chip ${M.groups.includes(g) ? 'on' : ''}" data-grp="${g}">${esc(gname(g))}</span>`).join('');
@@ -356,7 +356,7 @@
     const rs = Object.values(REP);
     $('#p_about').innerHTML = `
     <div class="card"><h2>How the numbers are made</h2><ul>
-     <li><b>Backtest vs live.</b> Backtests are simulated on historical data. Live results are entered by hand by the owner, net of charges. They are always shown separately and never joined into one curve.</li>
+     <li><b>Backtest vs live.</b> Backtests are simulated on historical data. Live results are entered by hand by the owner, net of charges; they are unaudited and can be verified on Tradetron. They are always shown separately and never joined into one curve.</li>
      <li><b>ROI and drawdown</b> are a % of the capital on the slider. Idle capital between size steps dilutes ROI. Drawdown is the fall from the highest cumulative P&amp;L, measured daily for intraday strategies (per trade for positional).</li>
      <li><b>Combining reports</b> from different runs uses common dates only; costs are summed.</li>
      <li><b>DTE</b> = trading sessions to expiry: expiry day 0, the session before 1; weekends and holidays are not counted.</li>
@@ -431,7 +431,7 @@
   async function boot() {
     await ensureShell(); decode(); gate();
     document.addEventListener('click', e => { if (e.target.id === 'reopen') { e.preventDefault(); $('#gate').style.display = 'flex'; $('#agree').onclick = () => { $('#gate').style.display = 'none'; }; } });
-    $('#foot').innerHTML = '© SRISUUTRA ALGO TRADING. Information and education only; not investment advice or an offer to buy or sell. Backtest results are simulated; live results are owner-entered and unaudited. Past performance does not guarantee future results. Options trading carries a high risk of loss. <a href="#" id="reopen">Read the full disclaimer</a>';
+    $('#foot').innerHTML = '© SRISUUTRA ALGO TRADING. Information and education only; not investment advice or an offer to buy or sell. Backtest results are simulated; live results are owner-entered and unaudited (verifiable on Tradetron). Past performance does not guarantee future results. Options trading carries a high risk of loss. <a href="#" id="reopen">Read the full disclaimer</a>';
     try { INDEX = await getJSON(INDEX_URL); if (!Array.isArray(INDEX)) throw new Error('index.json must be a list'); } catch (e) { IDX_ERR = 'The report list could not be loaded (' + e.message + '). If you opened this file directly from disk, serve it over http (GitHub Pages does this automatically).'; }
     for (const u of LIVE_URLS) { try { const j = await getJSON(u); LIVE = asLive(j); if (!LIVE) throw new Error(u + ' is not in the expected live format'); LIVE_ERR = ''; break; } catch (e) { LIVE = null; if (!/\(404\)/.test(e.message)) LIVE_ERR = e.message; } }
     if (!LIVE || !INDEX.length) await discover();

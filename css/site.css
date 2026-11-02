@@ -123,3 +123,8 @@ header.top .wrap{position:relative}
 .period .pv{font:700 34px Georgia,serif;margin:4px 0}.period .pv span{font:400 20px inherit;color:#c7cfe8;margin:0 6px}
 .period .ps{color:#c7cfe8;font-size:16px}
 @media(max-width:620px){.period .pv{font-size:22px}.period .pv span{font-size:15px}.period .ps{font-size:13px}}
+
+.qtybox{display:flex;flex-direction:column;gap:2px;align-items:center;text-align:center;background:#fff8e1;border:2px solid var(--gold2);border-radius:12px;padding:12px 16px;margin-bottom:14px;color:#3b2f00}
+.qtybox b{font-size:20px}.qtybox span{font-size:14px}
+@media(prefers-color-scheme:dark){.qtybox{background:#2d2606;color:#f5e6a8}}
+@media(max-width:620px){.qtybox b{font-size:16px}.qtybox span{font-size:12px}}
