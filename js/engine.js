@@ -30,7 +30,7 @@
   const sizeK = (capital, dep) => (dep > 0 ? Math.max(0, Math.floor(capital / dep + 1e-9)) : 1);
 
   const nullSettings = () => { const o = {}; SETTING_KEYS.forEach(k => o[k] = null); return o; };
-  const defaultCfg = () => ({ settings: nullSettings(), statutory_on: true, orders_scale_with_size: true });
+  const defaultCfg = () => ({ settings: nullSettings(), statutory_on: true, orders_scale_with_size: false });
   const has = v => v !== null && v !== undefined;
   const r2 = x => Math.round(x * 100) / 100;
 
