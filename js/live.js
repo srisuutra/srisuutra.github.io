@@ -69,10 +69,20 @@
       L.map((l, n) => `<tr class="${n < 2 ? 'hl' : ''}"><td>${l[0]}</td>${M.rows.map(r => `<td class="${cls(r.m[l[1]])}">${l[2](r.m[l[1]])}</td>`).join('')}<td class="ct ${cls(T[l[1]])}">${l[2](T[l[1]])}</td></tr>`).join('') + '</table>';
     const links = (D.links || []).filter(l => url(l.url)), notes = D.notes || [];
     const strat = M.S.map(s => `<tr><td>${esc(s.name)}</td><td>${badge(s)}</td><td>${inr(num(s.cap))}</td><td>${s.mult || 1}×</td><td>${s.code ? `<span class="fp">${esc(s.code)}</span> <button class="sm" data-copy="${esc(s.code)}">Copy</button>` : '-'}</td></tr>`).join('');
-    el.innerHTML = '<div class="qtybox"><b>Live trading on Tradetron started on 14 October 2026</b><span>Results below are from that date onwards.</span></div>' + head + `<p class="sub">As of <b>${fd(M.a)}</b> · ${entd.length} trading days${D.sub ? ' · ' + esc(D.sub) : ''}. Entries are net P&amp;L as shown by the broker, charges already deducted. Owner-entered and unaudited; can be verified on Tradetron.</p>${newHigh ? '<span class="badge lv">▲ NEW EQUITY HIGH</span>' : ''}</div>
-     <div class="kpis">${kpi('Capital deployed', inr(T.cap), M.on ? 'cumulative capital' : 'sum of strategy capital')}${kpi('Today', sg(T.day), sp(T.dayR), cls(T.day))}${kpi(fm(M.a.slice(0, 7)), sg(T.mo), sp(T.moR), cls(T.mo))}${kpi('Year to date', sg(T.yr), sp(T.yrR), cls(T.yr))}${kpi('All-time', sg(T.total), sp(T.cap ? T.total / T.cap * 100 : 0), cls(T.total))}${kpi('Max drawdown', pc(T.max), sg(T.maxA), 'neg')}${kpi('Win days', wr.toFixed(1) + '%', 'of trading days')}${kpi('Equity high', sg(hi), last === hi && hi > 0 ? 'closed at the peak' : 'peak so far')}</div>
+    const fy = M.dates.find(d => M.S.some(s => has(d, s))) || M.dates[0], tgl = ((D.links || []).find(l => /t\.me|telegram/i.test(l.label + l.url)) || {}).url || '';
+    const tint = v => v < 0 ? 'neg' : v > 0 ? 'pos' : 'flat', sn = M.rows.filter(r => has(M.a, r.s) || true);
+    const spark = (() => { const w = 420, h = 74, p = 6, vs = [0, ...eq], mn = Math.min(...vs), mx = Math.max(...vs), rg = (mx - mn) || 1, X = i => p + i * (w - 2 * p) / Math.max(1, vs.length - 1), Y = v => h - p - (v - mn) / rg * (h - 2 * p), pts = vs.map((v, i) => X(i).toFixed(1) + ',' + Y(v).toFixed(1)), col = last >= 0 ? '#0b8f57' : '#d12f2f';
+      return `<svg class="lvspark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path d="M${X(0).toFixed(1)},${h - p} L${pts.join(' L')} L${X(vs.length - 1).toFixed(1)},${h - p} Z" fill="${col}" opacity=".12"/><line x1="${p}" x2="${w - p}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="#9aa3c0" stroke-dasharray="3 3"/><line x1="${p}" x2="${w - p}" y1="${Y(mx).toFixed(1)}" y2="${Y(mx).toFixed(1)}" stroke="#c9a43b" stroke-dasharray="4 3"/><polyline points="${pts.join(' ')}" fill="none" stroke="${col}" stroke-width="2.5" stroke-linejoin="round"/><circle cx="${X(vs.length - 1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="4.5" fill="${col}"/></svg>`; })();
+    const stratRows = M.rows.map(r => { const v = r.m.day; return `<div class="lvsr ${cls(v)}"><span>${esc(r.s.name)}</span><b>${sg(v)}</b></div>`; }).join('');
+    el.innerHTML = '<div class="qtybox"><b>Live trading on Tradetron started on 14 October 2026</b><span>Results below are from that date onwards.</span></div>' + `<div class="card lvrep" id="lv_report">
+      <div class="lvtop"><div><h2 class="lvh">${esc(D.title || 'Live results')}</h2><div class="sub">Daily performance report · ${M.S.length} strateg${M.S.length === 1 ? 'y' : 'ies'} · since ${fd(fy)} · ${entd.length} trading days · ${inr(T.cap)} ${M.on ? 'cumulative capital' : 'capital'}${D.sub ? ' · ' + esc(D.sub) : ''}</div></div>
+        <div class="lvdate"><div class="lvd">${fd(M.a)}</div><span class="row noprint"><button class="sm" data-lcopy="1">⧉ Copy report</button><button class="sm" data-exp="csv" data-p="lv">CSV</button><button class="sm" data-exp="png" data-p="lv">PNG</button><button class="sm" data-exp="pdf" data-p="lv">PDF</button></span></div></div>
+      <div class="lvhero"><div class="lvbox ${tint(T.day)}"><div class="lvl">Today · ${fd(M.a)}</div><div class="lvbig ${cls(T.day)}">${sg(T.day)}</div><div class="lvp">${sp(T.dayR)} of capital</div><div class="lvsl">${stratRows}</div></div>
+        <div class="lvbox ${tint(T.total)}"><div class="lvl">All-time · since ${fd(fy)}</div><div class="lvbig ${cls(T.total)}">${sg(T.total)}</div><div class="lvp">${sp(T.cap ? T.total / T.cap * 100 : 0)} of capital</div>${spark}</div></div>
+      <div class="lvstats"><div class="lvst"><span>${fm(M.a.slice(0, 7))}</span><b class="${cls(T.mo)}">${sg(T.mo)}</b><em>${sp(T.moR)}</em></div><div class="lvst"><span>Equity high</span><b class="hi">${sg(hi)}</b><em>${last === hi && hi > 0 ? 'closed at the peak' : 'peak so far'}</em></div><div class="lvst"><span>Max drawdown</span><b class="neg">${pc(T.max)}</b><em>${sg(T.maxA)}</em></div><div class="lvst"><span>Win days</span><b>${wr.toFixed(1)}%</b><em>of trading days</em></div></div>
+      <div class="scroll">${table}</div>
+      <p class="sub">${M.on ? 'ROI and drawdown of every column use the cumulative capital.' : 'ROI and drawdown of each strategy use its own capital.'} Drawdown = fall from the highest equity (capital + cumulative P/L), in % of that peak equity. Entries are net P&amp;L as shown by the broker, charges already deducted. Owner-entered and unaudited; can be verified on Tradetron. Past performance does not guarantee future returns.${tgl ? ' Telegram: ' + esc(tgl.replace(/^https?:\/\//, '')) : ''}</p>${newHigh ? '<span class="badge lv">▲ NEW EQUITY HIGH</span>' : ''}</div>
      ${pview()}
-     <div class="card"><h2>Report <span class="badge lv">LIVE</span></h2><div class="scroll">${table}</div><p class="sub">${M.on ? 'ROI and drawdown of every column use the cumulative capital.' : 'ROI and drawdown of each strategy use its own capital.'} Drawdown = fall from the highest equity (capital + cumulative P/L), in % of that peak.</p></div>
      <div class="grid2"><div class="card"><h2>Cumulative return (%) <span class="badge lv">LIVE</span></h2><div id="lv_eq"></div></div><div class="card"><h2>Portfolio drawdown (%) <span class="badge lv">LIVE</span></h2><div id="lv_dd"></div></div></div>
      <div class="card"><h2>Monthly net P&amp;L <span class="badge lv">LIVE</span></h2><div id="lv_mon"></div></div><div class="card"><h2>P&amp;L calendar <span class="badge lv">LIVE</span></h2><div id="lv_cal"></div></div>`;
     const cum = eq.map(v => v / (M.tc || 1) * 100);
@@ -85,6 +95,7 @@
     if (!el.dataset.bound) {
       el.dataset.bound = 1;
       el.addEventListener('click', e => {
+        const lc = e.target.closest('[data-lcopy]'); if (lc) { copyReport(lc); return; }
         const b = e.target.closest('[data-lmt],[data-lsel],[data-copy]'); if (!b) return;
         if (b.dataset.lmt) st.mt = b.dataset.lmt;
         else if (b.dataset.lsel) st.sel[st.mt] = b.dataset.lsel;
@@ -92,6 +103,20 @@
         render(el, D);
       });
     }
+  }
+  function h2c() {
+    if (window.html2canvas) return Promise.resolve();
+    return new Promise((res, rej) => { const a = document.createElement('script'); a.src = 'vendor/html2canvas.min.js'; a.onload = res; a.onerror = () => { const b = document.createElement('script'); b.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'; b.crossOrigin = 'anonymous'; b.onload = res; b.onerror = () => rej(new Error('Could not load the image library')); document.head.appendChild(b); }; document.head.appendChild(a); });
+  }
+  async function copyReport(btn) {
+    const t0 = btn.textContent, say = m => { btn.textContent = m; setTimeout(() => { btn.textContent = t0; }, 1800); };
+    try {
+      btn.textContent = 'Copying…'; await h2c(); const node = document.getElementById('lv_report');
+      const cv = await window.html2canvas(node, { scale: 3, backgroundColor: getComputedStyle(document.body).backgroundColor, ignoreElements: n => n.classList && n.classList.contains('noprint') });
+      const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+      if (navigator.clipboard && window.ClipboardItem) { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); say('Copied ✓'); }
+      else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'SRISUUTRA_daily_report.png'; a.click(); say('Saved as picture'); }
+    } catch (e) { say('Copy blocked'); }
   }
   function csv() {
     if (!M) return;

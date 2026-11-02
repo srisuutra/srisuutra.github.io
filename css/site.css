@@ -140,3 +140,19 @@ header.top .wrap{position:relative}
 .multbox .mnote{font-size:12.5px;color:var(--mut);margin:6px 0 0;border-left:3px solid var(--gold2);padding-left:10px}
 
 .multbox .mc{display:flex;align-items:center;gap:8px}.multbox .mc input{width:80px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:inherit;font:inherit}
+
+.lvtop{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.lvh{font:700 28px Georgia,serif!important;color:var(--navy);margin:0}
+.lvdate{text-align:right}.lvd{font:700 18px Georgia,serif;margin-bottom:6px}
+.lvhero{display:grid;grid-template-columns:1fr 1.35fr;gap:14px;margin-bottom:14px}
+.lvbox{border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.lvbox.neg{background:#fdeaea;border-color:#f1b7b7}.lvbox.pos{background:#e6f5ec;border-color:#a9dcc0}.lvbox.flat{background:var(--card)}
+.lvl{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;color:var(--mut)}.lvbox.neg .lvl{color:#c0392b}.lvbox.pos .lvl{color:#0b8f57}
+.lvbig{font:700 42px/1.1 Georgia,serif}.lvp{color:var(--mut);font-size:15px;margin-bottom:6px}
+.lvsl{border-top:1px solid #f1b7b7;margin-top:10px;padding-top:8px}
+.lvsr{display:flex;justify-content:space-between;gap:10px;margin-top:4px;font-size:14px}.lvsr b{white-space:nowrap}.lvsr.pos{color:#0b8f57}.lvsr.neg{color:#d12f2f}
+.lvspark{width:100%;height:74px;display:block;margin-top:6px}
+.lvstats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.lvst{border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:var(--bg)}.lvst span{display:block;font-size:12px;letter-spacing:1.2px;text-transform:uppercase;color:var(--mut);font-weight:600}.lvst b{display:block;font:700 22px Georgia,serif}.lvst b.hi{color:#a37a00}.lvst em{font-style:normal;font-size:12px;color:var(--mut)}
+@media(max-width:820px){.lvhero{grid-template-columns:1fr}.lvstats{grid-template-columns:1fr 1fr}.lvbig{font-size:34px}.lvh{font-size:22px!important}}
+@media(prefers-color-scheme:dark){.lvbox.neg{background:#3a1c1f;border-color:#6b2e33}.lvbox.pos{background:#13301f;border-color:#2a6b45}.lvsl{border-color:#6b2e33}}
