@@ -462,7 +462,7 @@
     if (ok) return; $('#gate').style.display = 'flex'; armGate();
     $('#agree').onclick = () => { try { localStorage.setItem('ghs_agreed', '1'); } catch (e) { /* ignore */ } $('#gate').style.display = 'none'; };
   }
-  const BUILD = '2026-11-02.1';
+  const BUILD = '2026-11-03.1';
   function loadAbs(src) { return new Promise((res, rej) => { const t = document.createElement('script'); t.src = src + '?v=' + BUILD; t.onload = res; t.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(t); }); }
   const TGSVG = '<svg viewBox="0 0 24 24"><path d="M21.9 3.4 2.7 10.8c-1.3.5-1.3 1.3-.2 1.6l4.9 1.5 1.9 5.8c.2.6.1.9.8.9.5 0 .8-.2 1.1-.5l2.4-2.3 4.9 3.6c.9.5 1.5.2 1.7-.8l3-14.5c.3-1.2-.4-1.8-1.3-1.2zM8.6 13.2l9.6-6c.5-.3.9-.1.5.2l-8 7.2-.3 3.3z"/></svg>';
   let TGURL = '', SHARE = null;
