@@ -15,7 +15,7 @@
 
   function ddOf(vals, cap) {
     let V = cap, pk = cap, mx = 0, mxA = 0, cur = 0, curA = 0; const ser = [];
-    vals.forEach(v => { V += v; pk = Math.max(pk, V); curA = V - pk; cur = pk ? curA / pk * 100 : 0; if (cur < mx) { mx = cur; mxA = curA; } ser.push(cur); });
+    vals.forEach(v => { V += v; pk = Math.max(pk, V); curA = V - pk; cur = cap ? curA / cap * 100 : 0; if (cur < mx) { mx = cur; mxA = curA; } ser.push(cur); });
     return { cur, curA, max: mx, maxA: mxA, ser };
   }
   function metrics(vals, dates, cap, a) {
@@ -65,8 +65,11 @@
     const last = eq[eq.length - 1] || 0, hi = Math.max(0, ...eq), entd = M.dates.filter(d => M.S.some(s => has(d, s))), wins = entd.filter(d => M.tv[M.dates.indexOf(d)] > 0).length;
     const wr = entd.length ? wins / entd.length * 100 : 0, newHigh = eq.length > 1 && last === hi && hi > 0;
     const L = [['Today P/L', 'day', inr], ['Today ROI', 'dayR', pc], ['Month P/L', 'mo', inr], ['Month ROI', 'moR', pc], ['YTD P/L', 'yr', inr], ['YTD ROI', 'yrR', pc], ['Current drawdown ₹', 'curA', inr], ['Current drawdown %', 'cur', pc], ['Max drawdown ₹', 'maxA', inr], ['Max drawdown %', 'max', pc]];
-    const table = `<table class="t"><tr><th>Metric</th>${M.rows.map(r => `<th>${esc(r.s.name)}</th>`).join('')}<th class="ct">CUMULATIVE</th></tr>` +
-      L.map((l, n) => `<tr class="${n < 2 ? 'hl' : ''}"><td>${l[0]}</td>${M.rows.map(r => `<td class="${cls(r.m[l[1]])}">${l[2](r.m[l[1]])}</td>`).join('')}<td class="ct ${cls(T[l[1]])}">${l[2](T[l[1]])}</td></tr>`).join('') + '</table>';
+    const DOT = ['#1c2a4a', '#2f6fd6', '#f0a020', '#0b8f57', '#8e44ad'], mname = fm(M.a.slice(0, 7)).split(' ')[0];
+    const pl = (v, r) => `<div class="pv ${cls(v)}"><b>${inr(v)}</b> <small>(${sp(r)})</small></div>`;
+    const ddc = m => { const w = m.max < 0 ? Math.max(0, Math.min(100, m.cur / m.max * 100)) : 0; return `<div class="ddc"><div class="ddt"><b class="${m.cur < 0 ? 'neg' : ''}">${pc(m.cur)}</b><span>max: ${pc(m.max)}</span></div><div class="ddb"><i style="width:${w.toFixed(1)}%"></i></div></div>`; };
+    const trow = (nm, dot, m, tot) => `<tr class="${tot ? 'tot' : ''}"><td class="sn">${dot ? `<i class="dot" style="background:${dot}"></i>` : ''}${esc(nm)}</td><td>${pl(m.day, m.dayR)}</td><td>${pl(m.mo, m.moR)}</td><td>${pl(m.total, m.cap ? m.total / m.cap * 100 : 0)}</td><td>${ddc(m)}</td></tr>`;
+    const table = `<table class="t lvtbl"><tr><th>Strategy</th><th>Today P&amp;L</th><th>${esc(mname)} P&amp;L</th><th>All-time P&amp;L</th><th>Drawdown <small>(current vs max)</small></th></tr>` + M.rows.map((r, i) => trow(r.s.name, DOT[i % DOT.length], r.m, false)).join('') + trow('Portfolio total', '', T, true) + '</table>';
     const links = (D.links || []).filter(l => url(l.url)), notes = D.notes || [];
     const strat = M.S.map(s => `<tr><td>${esc(s.name)}</td><td>${badge(s)}</td><td>${inr(num(s.cap))}</td><td>${s.mult || 1}×</td><td>${s.code ? `<span class="fp">${esc(s.code)}</span> <button class="sm" data-copy="${esc(s.code)}">Copy</button>` : '-'}</td></tr>`).join('');
     const fy = M.dates.find(d => M.S.some(s => has(d, s))) || M.dates[0], tgl = ((D.links || []).find(l => /t\.me|telegram/i.test(l.label + l.url)) || {}).url || '';
@@ -81,7 +84,7 @@
         <div class="lvbox ${tint(T.total)}"><div class="lvl">All-time · since ${fd(fy)}</div><div class="lvbig ${cls(T.total)}">${sg(T.total)}</div><div class="lvp">${sp(T.cap ? T.total / T.cap * 100 : 0)} of capital</div>${spark}</div></div>
       <div class="lvstats"><div class="lvst"><span>${fm(M.a.slice(0, 7))}</span><b class="${cls(T.mo)}">${sg(T.mo)}</b><em>${sp(T.moR)}</em></div><div class="lvst"><span>Equity high</span><b class="hi">${sg(hi)}</b><em>${last === hi && hi > 0 ? 'closed at the peak' : 'peak so far'}</em></div><div class="lvst"><span>Max drawdown</span><b class="neg">${pc(T.max)}</b><em>${sg(T.maxA)}</em></div><div class="lvst"><span>Win days</span><b>${wr.toFixed(1)}%</b><em>of trading days</em></div></div>
       <div class="scroll">${table}</div>
-      <p class="sub">${M.on ? 'ROI and drawdown of every column use the cumulative capital.' : 'ROI and drawdown of each strategy use its own capital.'} Drawdown = fall from the highest equity (capital + cumulative P/L), in % of that peak equity. Entries are net P&amp;L as shown by the broker, charges already deducted. Owner-entered and unaudited; can be verified on Tradetron. Past performance does not guarantee future returns.${tgl ? ' Telegram: ' + esc(tgl.replace(/^https?:\/\//, '')) : ''}</p>${newHigh ? '<span class="badge lv">▲ NEW EQUITY HIGH</span>' : ''}</div>
+      <p class="sub">${M.on ? 'ROI and drawdown of every column use the cumulative capital.' : 'ROI and drawdown of each strategy use its own capital.'} Drawdown = fall from the highest equity (capital + cumulative P/L), in % of the capital deployed; the bar shows the current drawdown against the maximum seen to date. Entries are net P&amp;L as shown by the broker, charges already deducted. Owner-entered and unaudited; can be verified on Tradetron. Past performance does not guarantee future returns.${tgl ? ' Telegram: ' + esc(tgl.replace(/^https?:\/\//, '')) : ''}</p>${newHigh ? '<span class="badge lv">▲ NEW EQUITY HIGH</span>' : ''}</div>
      ${pview()}
      <div class="grid2"><div class="card"><h2>Cumulative return (%) <span class="badge lv">LIVE</span></h2><div id="lv_eq"></div></div><div class="card"><h2>Portfolio drawdown (%) <span class="badge lv">LIVE</span></h2><div id="lv_dd"></div></div></div>
      <div class="card"><h2>Monthly net P&amp;L <span class="badge lv">LIVE</span></h2><div id="lv_mon"></div></div><div class="card"><h2>P&amp;L calendar <span class="badge lv">LIVE</span></h2><div id="lv_cal"></div></div>`;

@@ -456,9 +456,10 @@
   document.addEventListener('change', e => { if (e.target.id === 'b_multn') { S.mult = Math.max(1, Math.min(MAXM, Math.round(+e.target.value) || 1)); renderBT(); return; } if (e.target.id === 'b_brk') { const v = e.target.value.trim(); S.cfg.settings.brokerage_per_order = v === '' || !isFinite(+v) || +v < 0 ? null : +v; renderBT(); return; } if (e.target.id === 'b_capn') { S.cap = Math.max(0, +e.target.value || 0); renderBT(); } });
 
   /* ---------- gate + boot ---------- */
+  function armGate() { const c = $('#agreechk'), b = $('#agree'); if (!c || !b) return; c.checked = false; b.disabled = true; c.onchange = () => { b.disabled = !c.checked; }; }
   function gate() {
     let ok = false; try { ok = localStorage.getItem('ghs_agreed') === '1'; } catch (e) { /* ignore */ }
-    if (ok) return; $('#gate').style.display = 'flex';
+    if (ok) return; $('#gate').style.display = 'flex'; armGate();
     $('#agree').onclick = () => { try { localStorage.setItem('ghs_agreed', '1'); } catch (e) { /* ignore */ } $('#gate').style.display = 'none'; };
   }
   const BUILD = '2026-11-02.1';
@@ -475,7 +476,7 @@
   }
   async function boot() {
     await ensureShell(); decode(); gate();
-    document.addEventListener('click', e => { if (e.target.id === 'reopen') { e.preventDefault(); $('#gate').style.display = 'flex'; $('#agree').onclick = () => { $('#gate').style.display = 'none'; }; } });
+    document.addEventListener('click', e => { if (e.target.id === 'reopen') { e.preventDefault(); $('#gate').style.display = 'flex'; armGate(); $('#agree').onclick = () => { $('#gate').style.display = 'none'; }; } });
     $('#foot').innerHTML = '© SRISUUTRA ALGO TRADING. Information and education only; not investment advice or an offer to buy or sell. Backtest results are simulated; live results are owner-entered and unaudited (verifiable on Tradetron). Past performance does not guarantee future results. Options trading carries a high risk of loss. <a href="#" id="reopen">Read the full disclaimer</a>';
     try { INDEX = await getJSON(INDEX_URL); if (!Array.isArray(INDEX)) throw new Error('index.json must be a list'); } catch (e) { IDX_ERR = 'The report list could not be loaded (' + e.message + '). If you opened this file directly from disk, serve it over http (GitHub Pages does this automatically).'; }
     for (const u of LIVE_URLS) { try { const j = await getJSON(u); LIVE = asLive(j); if (!LIVE) throw new Error(u + ' is not in the expected live format'); LIVE_ERR = ''; break; } catch (e) { LIVE = null; if (!/\(404\)/.test(e.message)) LIVE_ERR = e.message; } }

@@ -59,6 +59,8 @@ table.in input{background:var(--inp)}table.in input.gp{background:#d7f0e2;border
 .ha-l{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;color:#6a7391}.ha-box.neg .ha-l{color:#c0392b}.ha-box.pos .ha-l{color:#0b8f57}.ha-big{font:700 42px/1.1 Georgia,serif}.ha-p{color:#6a7391;font-size:15px;margin-bottom:6px}
 .ha-sl{border-top:1px solid #f1b7b7;margin-top:10px;padding-top:8px}.ha-sr b{white-space:nowrap}.ha-sr{display:flex;justify-content:space-between;gap:10px;margin-top:4px;font-size:14px}.ha-sr.gp,.ha-sr.pos{color:#0b8f57}.ha-sr.gn,.ha-sr.neg{color:#d12f2f}
 .ha-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}.ha-stats>div{border:1px solid #dfe3ee;border-radius:12px;padding:10px 14px;background:#f7f8fc}.ha-stats span{display:block;font-size:12px;letter-spacing:1.2px;text-transform:uppercase;color:#6a7391;font-weight:600}.ha-stats b{display:block;font:700 22px Georgia,serif}.ha-stats em{font-style:normal;font-size:12px;color:#6a7391}</style>
+<style>.lt td,.lt th{text-align:left;vertical-align:middle}.lt-sn{font-weight:700;min-width:170px}.lt-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px}.lt-pv b{font-size:1.05em}.lt-pv small{font-size:.75em}.lt-pv.pos{color:#0b8f57}.lt-pv.neg{color:#c0392b}
+.lt-dd{min-width:150px}.lt-dt{display:flex;justify-content:space-between;font-size:.8em;margin-bottom:3px}.lt-dt span{color:#0a8a9a;font-size:.85em}.lt-db{height:8px;border-radius:5px;background:#f8c9c9;overflow:hidden}.lt-db i{display:block;height:100%;background:linear-gradient(90deg,#8b1a1a,#d12f2f)}.lt-tot td{background:#f6f1df;font-weight:700;border-top:2px solid #1c2a4a}</style>
 </head><body>
 <!--GHPUB-START-->
 <details class="ghpanel" id="ghp" style="background:var(--card,#fff);border:1px solid var(--line,#dfe3ee);border-radius:8px;padding:10px 14px;margin:0 0 14px"><summary style="cursor:pointer;font-weight:700">GitHub connection (set up once)</summary>
@@ -189,7 +191,7 @@ function fmt(c,v){if(c=='size'&&!v)return;if(!saved){$('fm').textContent='First 
  $('fm').textContent='Applied.';saveTxt()}
 
 // ---- calculations ----
-function ddOf(vals,cap){let V=cap,pk=cap,mx=0,mxA=0,cur=0,curA=0,ser=[];vals.forEach(v=>{V+=v;pk=Math.max(pk,V);curA=V-pk;cur=pk?curA/pk*100:0;if(cur<mx){mx=cur;mxA=curA}ser.push(cur)});return{cur,curA,max:mx,maxA:mxA,ser}}
+function ddOf(vals,cap){let V=cap,pk=cap,mx=0,mxA=0,cur=0,curA=0,ser=[];vals.forEach(v=>{V+=v;pk=Math.max(pk,V);curA=V-pk;cur=cap?curA/cap*100:0;if(cur<mx){mx=cur;mxA=curA}ser.push(cur)});return{cur,curA,max:mx,maxA:mxA,ser}}
 function metrics(vals,dates,cap){const a=S.asof,sum=f=>vals.reduce((t,v,i)=>t+(f(dates[i])?v:0),0),roi=p=>cap?p/cap*100:0;
  const day=sum(d=>d==a),mo=sum(d=>d.slice(0,7)==a.slice(0,7)),yr=sum(d=>d.slice(0,4)==a.slice(0,4)),f=ddOf(vals,cap);
  return{cap,day,dayR:roi(day),mo,moR:roi(mo),yr,yrR:roi(yr),cur:f.cur,curA:f.curA,max:f.max,maxA:f.maxA,ser:f.ser,total:vals.reduce((t,v)=>t+v,0)}}
@@ -207,6 +209,11 @@ function line(ys,color,fill){if(ys.length<1)return'<small>Add daily P/L to see t
  const pts=ys.map((v,i)=>X(i)+','+Y(v)).join(' ');
  return`<svg viewBox="0 0 ${W} ${H}" width="100%"><line x1="${p}" x2="${W-8}" y1="${Y(0)}" y2="${Y(0)}" stroke="#bbc" stroke-dasharray="3"/><polygon points="${X(0)},${Y(0)} ${pts} ${X(ys.length-1)},${Y(0)}" fill="${fill}" opacity=".25"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2"/><text x="0" y="${Y(mx)+4}" font-size="13" fill="#667">${mx.toFixed(1)}%</text><text x="0" y="${Y(mn)+4}" font-size="13" fill="#667">${mn.toFixed(1)}%</text></svg>`}
 
+function lineTbl(R,T,mon){const DOT=['#1c2a4a','#2f6fd6','#f0a020','#0b8f57','#8e44ad'],mn=mon.split(' ')[0];
+ const pl=(v,r)=>`<div class="lt-pv ${cls(v)}"><b>${inr(v)}</b> <small>(${pc(r)})</small></div>`;
+ const dd=m=>{const w=m.max<0?Math.max(0,Math.min(100,m.cur/m.max*100)):0;return `<div class="lt-dd"><div class="lt-dt"><b class="${m.cur<0?'neg':''}">${pc(m.cur)}</b><span>max: ${pc(m.max)}</span></div><div class="lt-db"><i style="width:${w.toFixed(1)}%"></i></div></div>`};
+ const row=(n,dot,m,tot)=>`<tr class="${tot?'lt-tot':''}"><td class="lt-sn">${dot?`<i class="lt-dot" style="background:${dot}"></i>`:''}${n}</td><td>${pl(m.day,m.dayR)}</td><td>${pl(m.mo,m.moR)}</td><td>${pl(m.total,m.cap?m.total/m.cap*100:0)}</td><td>${dd(m)}</td></tr>`;
+ return `<table class="rt lt" style="font-size:${S.tsize||15}px"><tr><th style="text-align:left">Strategy</th><th>Today P&amp;L</th><th>${mn} P&amp;L</th><th>All-time P&amp;L</th><th>Drawdown <small>(current vs max, on capital deployed)</small></th></tr>${R.map((r,i)=>row(esc(r.s.name),DOT[i%DOT.length],r.m,false)).join('')}${row('Portfolio total','',T,true)}</table>`}
 function sgn(v){return (v>0?'+':'')+inr(v)}
 /* Template A: Today / All-time hero boxes (strategy names coloured by P&L), small equity graph, key stats */
 function heroA(c,T,R,mon){let t=0;const eq=c.tv.map(v=>t+=v),last=eq.length?eq[eq.length-1]:0,hi=Math.max(0,...eq),ent=c.dates.filter((d,i)=>S.strat.some(s=>{const v=(S.days[d]||{})[s.id];return v!==''&&v!=null})),wd=ent.filter(d=>c.tv[c.dates.indexOf(d)]>0).length,wr=ent.length?wd/ent.length*100:0;
@@ -218,7 +225,7 @@ function heroA(c,T,R,mon){let t=0;const eq=c.tv.map(v=>t+=v),last=eq.length?eq[e
  return `<div class="ha-hero"><div class="ha-box ${tint(T.day)}"><div class="ha-l">Today · ${fd(S.asof)}</div><div class="ha-big ${cls(T.day)}">${sgn(T.day)}</div><div class="ha-p">${pc(T.dayR)} of capital</div><div class="ha-sl">${rows}</div></div>
  <div class="ha-box ${tint(T.total)}"><div class="ha-l">All-time · since ${fd(fy)}</div><div class="ha-big ${cls(T.total)}">${sgn(T.total)}</div><div class="ha-p">${pc(T.cap?T.total/T.cap*100:0)} of capital</div>${sp}</div></div>
  <div class="ha-stats"><div><span>${mon}</span><b class="${cls(T.mo)}">${sgn(T.mo)}</b><em>${pc(T.moR)}</em></div><div><span>Equity high</span><b style="color:#a37a00">${sgn(hi)}</b><em>peak so far</em></div><div><span>Max drawdown</span><b class="${cls(T.maxA)}">${pc(T.max)}</b><em>${inr(T.maxA)}</em></div><div><span>Win days</span><b>${wr.toFixed(1)}%</b><em>of trading days</em></div></div>`}
-function rep(){save();const c=calc(),T=c.tot,R=c.rows;const RW=Math.max(900,190+160*(R.length+1));CW=Math.round((RW-52-14)/2);CH=Math.round(CW*.56);$('report').style.width=RW+'px';$('cc').placeholder='Auto: '+inr(S.strat.reduce((t,x)=>t+num(x.cap),0));
+function rep(){save();const c=calc(),T=c.tot,R=c.rows;const RW=Math.max(1060,190+160*(R.length+1));CW=Math.round((RW-52-14)/2);CH=Math.round(CW*.56);$('report').style.width=RW+'px';$('cc').placeholder='Auto: '+inr(S.strat.reduce((t,x)=>t+num(x.cap),0));
  const L=[['Today P/L','day',inr],['Today ROI','dayR',pc],['Month P/L','mo',inr],['Month ROI','moR',pc],['YTD P/L','yr',inr],['YTD ROI','yrR',pc],['Current drawdown ₹','curA',inr],['Current drawdown %','cur',pc],['Max drawdown ₹','maxA',inr],['Max drawdown %','max',pc]];
  const td=(m,k,f,x)=>`<td class="${k=='cap'?'neu':cls(m[k])}${x?' ct':''}">${f(m[k])}</td>`;
  const trs=L.map((l,n)=>`<tr class="${[2,4,6,8].includes(n)?'sp':''}${n==0?' tdy a':n==1?' tdy b':''}"><td>${l[0]}</td>${R.map(r=>td(r.m,l[1],l[2])).join('')}${td(T,l[1],l[2],1)}</tr>`).join('');
@@ -226,7 +233,7 @@ function rep(){save();const c=calc(),T=c.tot,R=c.rows;const RW=Math.max(900,190+
  const mon=new Date((S.asof||'2026-01-01')+'T00:00').toLocaleString('en-IN',{month:'long',year:'numeric'});
  $('report').innerHTML=`<div class="ent" id="e_tbl"><button class="cb cbt" data-html2canvas-ignore onclick="cpy('e_tbl',this)">⧉ Copy report</button><div class="rh"><h1 id="ttl" contenteditable>${S.title}</h1><div style="text-align:right;font-size:22px;line-height:1.1"><b>${S.asof?new Date(S.asof+'T00:00').toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'}):''}</b></div></div>
  <div id="sub" contenteditable style="font-size:13px;color:#5a6280;margin:-6px 0 12px;outline:none">${S.sub||'Daily performance report'}</div>${heroA(c,T,R,mon)}
- <table class="rt" style="font-size:${S.tsize||15}px"><tr><th>Metric</th>${R.map(r=>`<th>${esc(r.s.name)}</th>`).join('')}<th class="ct">CUMULATIVE</th></tr>${trs}</table></div>
+ ${lineTbl(R,T,mon)}</div>
  <div class="grid"><div class="ch" id="e_c1"><button class="cb cbi" data-html2canvas-ignore onclick="cpy('e_c1',this)">⧉ Copy</button><b>Cumulative portfolio return (%)</b>${line(cum,cum.length&&cum[cum.length-1]<0?'#d12c2c':'#0a8f55',cum.length&&cum[cum.length-1]<0?'#d12c2c':'#0a8f55')}</div>
  <div class="ch" id="e_c2"><button class="cb cbi" data-html2canvas-ignore onclick="cpy('e_c2',this)">⧉ Copy</button><b>Portfolio drawdown (%)</b>${line(T.ser,'#c9a43b','#c9a43b')}</div>
  </div>
