@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 540" width="540" height="540" role="img" aria-label="SRISUUTRA emblem">
+<circle cx="270" cy="270" r="270" fill="#1c2a4a"/>
+<circle cx="270" cy="270" r="250" fill="none" stroke="#c9a43b" stroke-width="5"/>
+<g transform="translate(81.2 78) scale(3.2)">
+<path d="M86 34 C 86 14, 32 14, 32 42 C 32 66, 88 54, 88 80 C 88 106, 30 106, 30 84" fill="none" stroke="#e8c766" stroke-width="10" stroke-linecap="round"/>
+<circle cx="30" cy="84" r="8" fill="#c9a43b"/>
+<circle cx="86" cy="34" r="8" fill="#f4f6fb"/>
+</g>
+</svg>
