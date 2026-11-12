@@ -4,13 +4,13 @@
    "name": "Nifty Non Directional Intraday",
    "exchange": "NFO",
    "link": "https://tradetron.tech/strategy/999050766",
-   "code": ""
+   "code": "3b3b8244-c500-4eb6-93de-5aad220705c4"
   },
   {
    "name": "Nifty Intraday Option Buying (Pyramid L1-L3)",
    "exchange": "NFO",
-   "link": "",
-   "code": ""
+   "link": "https://tradetron.tech/strategy/999331626",
+   "code": "bb16bc6c-fb04-4e66-a269-9da85a7673eb"
   }
  ]
 }
