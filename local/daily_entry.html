@@ -17,6 +17,8 @@ button{cursor:pointer;background:var(--navy);color:#fff;border-color:var(--navy)
 button.x{background:none;color:#c0392b;border:none;padding:2px 6px}
 .sc{overflow-x:auto}table.in{border-collapse:collapse}table.in td,table.in th{padding:3px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
 table.in input{width:110px}table.in input.n{width:100px;text-align:right}
+/* Freeze the Daily P/L heading row while scrolling */
+#dl th{position:sticky;top:0;z-index:2;background:var(--card);box-shadow:0 1px 0 var(--line)}
 label{color:var(--mut);font-size:12px}
 #report{background:#fff;color:#1b2440;padding:26px;border-radius:6px;min-width:0;border:1px solid var(--line)}
 #report h1{font-family:Georgia,serif;font-size:34px;margin:0;color:#1c2a4a;outline:none}
